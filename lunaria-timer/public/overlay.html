@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lunaria Timer</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  :root {
+    --accent: #b36bff;
+    --accent-rgb: 179, 107, 255;
+    --accent-light: #d9b5ff;
+    --scale: 1;
+    --fit: 1;
+    --text: #fff8ff;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    font-family: "Lunaria Serif", "Cinzel", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body.preview-bg {
+    background: radial-gradient(ellipse at 50% 60%, #3a0f6e 0%, #1a0536 45%, #0b0114 100%);
+  }
+
+  .stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: calc(100px * var(--scale) * var(--fit));
+    opacity: 0;
+    transition: opacity .8s ease;
+  }
+  .stage.ready { opacity: 1; }
+
+  .glow {
+    text-shadow:
+      0 0 .04em #fff,
+      0 0 .12em var(--accent-light),
+      0 0 .3em var(--accent),
+      0 0 .7em rgba(var(--accent-rgb), .55);
+  }
+
+  /* Titre du -athon */
+  .title {
+    display: none;
+    align-items: center;
+    gap: .22em;
+    font-size: .46em;
+    font-weight: 600;
+    letter-spacing: .12em;
+    margin-bottom: -.05em;
+  }
+  .mode-athon .title.on { display: flex; }
+  .title svg { width: .9em; height: .9em; flex: none; filter: drop-shadow(0 0 .12em var(--accent)); }
+
+  .script {
+    font-family: "Lunaria Script", "Allura", cursive;
+    font-weight: 400;
+    font-size: .56em;
+    line-height: 1.1;
+    white-space: nowrap;
+    letter-spacing: .01em;
+  }
+  .top { margin-bottom: -.06em; }
+  .top:empty, .bottom:empty { display: none; }
+  .mode-athon .top { display: none; }
+
+  /* Horloge */
+  .clock-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .32em;
+  }
+  .clock-wrap::before {
+    /* voile sombre très doux pour rester lisible sur les nuages clairs */
+    content: "";
+    position: absolute;
+    inset: -8% -14%;
+    background: radial-gradient(closest-side, rgba(12, 0, 28, .45), rgba(12, 0, 28, 0));
+    z-index: -1;
+    pointer-events: none;
+  }
+  .clock {
+    display: flex;
+    align-items: baseline;
+    font-size: 1.5em;
+    font-weight: 600;
+    line-height: 1.12;
+    transition: opacity .4s, filter .4s;
+  }
+  .clock .d {
+    display: inline-block;
+    width: .7em;
+    text-align: center;
+  }
+  .clock .c {
+    display: inline-block;
+    width: .32em;
+    text-align: center;
+    transform: translateY(-.06em);
+  }
+  .clock .d.tick { animation: tick .45s ease-out; }
+  @keyframes tick {
+    from { opacity: .35; transform: translateY(-.08em); filter: blur(1px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+  .paused .clock { opacity: .55; filter: saturate(.6); }
+
+  .sparkle {
+    width: .34em;
+    height: .34em;
+    flex: none;
+    color: #fff;
+    filter: drop-shadow(0 0 .06em #fff) drop-shadow(0 0 .14em var(--accent));
+    animation: twinkle 3.2s ease-in-out infinite;
+  }
+  .sparkle.r { animation-delay: -1.6s; }
+  @keyframes twinkle {
+    0%, 100% { opacity: .95; transform: scale(1) rotate(0deg); }
+    50% { opacity: .35; transform: scale(.7) rotate(45deg); }
+  }
+
+  .state-label {
+    font-size: .42em;
+    height: 0;
+    overflow: visible;
+    opacity: 0;
+    transition: opacity .4s;
+    margin-top: -.1em;
+  }
+  .paused .state-label { opacity: 1; }
+
+  .rules {
+    display: none;
+    margin-top: .12em;
+    font-size: .2em;
+    font-weight: 600;
+    letter-spacing: .14em;
+    white-space: nowrap;
+    opacity: .92;
+  }
+  .mode-athon .rules.on { display: block; }
+  .rules .sep { display: inline-block; margin: 0 .6em; opacity: .7; }
+  .rules .boost {
+    display: inline-block;
+    margin-left: .8em;
+    padding: .05em .6em;
+    border: 1px solid var(--accent-light);
+    border-radius: 1em;
+    animation: boost 2s ease-in-out infinite;
+  }
+  @keyframes boost { 50% { box-shadow: 0 0 .8em var(--accent); } }
+
+  .stats {
+    display: none;
+    margin-top: .25em;
+    font-size: .18em;
+    letter-spacing: .12em;
+    opacity: .85;
+  }
+  .mode-athon .stats.on { display: block; }
+
+  /* Fin */
+  .end-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(.9);
+    font-size: .95em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1.2s ease, transform 1.2s ease;
+  }
+  .ended .end-text { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .ended .clock-wrap, .ended .top, .ended .bottom, .ended .rules, .ended .stats { opacity: 0; transition: opacity 1s; }
+  .mode-athon.ended .end-text { top: auto; bottom: -.45em; transform: translate(-50%, 0); font-size: .6em; }
+  .mode-athon.ended .clock-wrap { opacity: .5; }
+
+  /* Temps ajouté : remplace le titre le temps d'une animation */
+  .popups {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .popup {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    align-items: baseline;
+    gap: .22em;
+    white-space: nowrap;
+    opacity: 0;
+    animation: pop 3.4s ease-out forwards;
+  }
+  .popup .plus { font-size: .5em; font-weight: 700; letter-spacing: .04em; }
+  .popup .who { font-size: .5em; }
+  .popup.minus .plus { color: #ffd6f4; }
+  @keyframes pop {
+    0% { opacity: 0; transform: translate(-50%, .25em) scale(.85); }
+    12% { opacity: 1; transform: translate(-50%, 0) scale(1.06); }
+    20% { transform: translate(-50%, 0) scale(1); }
+    80% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -.3em); }
+  }
+  .title, .top { transition: opacity .35s ease; }
+  .popping .title, .popping .top { opacity: 0; }
+  .flash .clock { animation: flash .9s ease-out; }
+  @keyframes flash {
+    0% { filter: brightness(1.9); }
+    100% { filter: none; }
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="popups" id="popups"></div>
+  <div class="title glow" id="title">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.5 2.2a9.8 9.8 0 1 0 7.3 13.9 8.2 8.2 0 0 1-7.3-13.9z"/></svg>
+    <span id="titleText">Lunariathon</span>
+    <svg viewBox="0 0 24 24" aria-hidden="true" style="transform:scaleX(-1)"><path fill="currentColor" d="M14.5 2.2a9.8 9.8 0 1 0 7.3 13.9 8.2 8.2 0 0 1-7.3-13.9z"/></svg>
+  </div>
+  <div class="script top glow" id="top"></div>
+  <div class="clock-wrap">
+    <svg class="sparkle" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0c.6 6.4 5.6 11.4 12 12-6.4.6-11.4 5.6-12 12-.6-6.4-5.6-11.4-12-12C6.4 11.4 11.4 6.4 12 0z"/></svg>
+    <div class="clock glow" id="clock"></div>
+    <svg class="sparkle r" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0c.6 6.4 5.6 11.4 12 12-6.4.6-11.4 5.6-12 12-.6-6.4-5.6-11.4-12-12C6.4 11.4 11.4 6.4 12 0z"/></svg>
+  </div>
+  <div class="script state-label glow">en pause</div>
+  <div class="script bottom glow" id="bottom"></div>
+  <div class="rules glow" id="rules"></div>
+  <div class="stats glow" id="stats"></div>
+  <div class="script end-text glow" id="endText"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage');
+  const params = new URLSearchParams(location.search);
+
+  // Hors ligne : fichier ouvert directement dans OBS (file:///… ou case « Fichier local »).
+  const offline = location.protocol === 'file:' || location.hostname === 'absolute' || params.has('offline');
+
+  let view = null;      // état affiché
+  let clockOffset = 0;  // décalage entre l'horloge du serveur et celle d'OBS
+  let lastText = '';
+
+  function applyDisplay(d) {
+    const root = document.documentElement.style;
+    if (d.accent && /^#[0-9a-f]{6}$/i.test(d.accent)) {
+      const n = parseInt(d.accent.slice(1), 16);
+      const rgb = [n >> 16, (n >> 8) & 255, n & 255];
+      root.setProperty('--accent', d.accent);
+      root.setProperty('--accent-rgb', rgb.join(', '));
+      root.setProperty('--accent-light', `rgb(${rgb.map((c) => Math.round(c + (255 - c) * 0.45)).join(', ')})`);
+    }
+    if (d.scale) root.setProperty('--scale', d.scale);
+    $('title').classList.toggle('on', d.showTitle !== false);
+    $('rules').classList.toggle('on', d.showRules !== false);
+    $('stats').classList.toggle('on', !!d.showStats);
+  }
+
+  function remainingMs() {
+    if (!view) return 0;
+    if (view.status === 'running') return Math.max(0, view.endAt - (Date.now() + clockOffset));
+    if (view.status === 'ended') return 0;
+    return Math.max(0, view.remainingMs);
+  }
+
+  function format(ms, forceHours) {
+    const t = Math.ceil(ms / 1000);
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const s = t % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    return h > 0 || forceHours ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  }
+
+  function renderClock(text) {
+    if (text === lastText) return;
+    const clock = $('clock');
+    if (clock.children.length !== text.length) {
+      clock.innerHTML = '';
+      for (const ch of text) {
+        const span = document.createElement('span');
+        span.className = ch === ':' ? 'c' : 'd';
+        span.textContent = ch;
+        clock.appendChild(span);
+      }
+    } else {
+      [...text].forEach((ch, i) => {
+        const span = clock.children[i];
+        if (span.textContent !== ch) {
+          span.textContent = ch;
+          span.classList.remove('tick');
+          void span.offsetWidth;
+          span.classList.add('tick');
+        }
+      });
+    }
+    lastText = text;
+  }
+
+  function render() {
+    if (!view) return;
+    const athon = view.mode === 'athon';
+    const ms = remainingMs();
+    const ended = view.status === 'ended' || (view.status === 'running' && ms <= 0);
+    stage.classList.toggle('mode-athon', athon);
+    stage.classList.toggle('paused', view.status === 'paused');
+    stage.classList.toggle('ended', ended);
+    const before = lastText.length;
+    renderClock(format(ms, athon));
+    if (lastText.length !== before) fit();
+  }
+
+  // Réduit l'affichage si la source OBS est plus petite que le contenu.
+  function fit() {
+    const root = document.documentElement.style;
+    root.setProperty('--fit', 1);
+    const w = stage.scrollWidth;
+    const h = stage.scrollHeight;
+    if (!w || !h) return;
+    const f = Math.min(1, (window.innerWidth * 0.97) / w, (window.innerHeight * 0.97) / h);
+    root.setProperty('--fit', f.toFixed(3));
+  }
+  window.addEventListener('resize', fit);
+
+  function setTexts() {
+    if (!view) return;
+    const athon = view.mode === 'athon';
+    $('top').textContent = view.countdown.top || '';
+    $('bottom').textContent = athon ? (view.athon.subtitle || '') : (view.countdown.bottom || '');
+    $('endText').textContent = athon ? view.athon.endText : view.countdown.endText;
+    $('titleText').textContent = view.athon.title;
+    const rules = $('rules');
+    rules.innerHTML = '';
+    (view.athon.rules || []).forEach((r, i) => {
+      if (i) {
+        const sep = document.createElement('span');
+        sep.className = 'sep';
+        sep.textContent = '✦';
+        rules.appendChild(sep);
+      }
+      rules.appendChild(document.createTextNode(r));
+    });
+    if (view.athon.multiplier > 1) {
+      const b = document.createElement('span');
+      b.className = 'boost';
+      b.textContent = `Pleine lune ×${view.athon.multiplier}`;
+      rules.appendChild(b);
+    }
+    const st = view.stats || {};
+    const subs = (st.t1 || 0) + (st.t2 || 0) + (st.t3 || 0) + (st.prime || 0) + (st.gifts || 0);
+    $('stats').textContent = `${subs} subs ✦ ${st.bits || 0} bits ✦ ${String(st.tips || 0).replace('.', ',')} de dons`;
+  }
+
+  function fmtAdded(ms) {
+    const t = Math.round(Math.abs(ms) / 1000);
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    if (h) return `${h}h${m ? String(m).padStart(2, '0') : ''}`;
+    if (m && s) return `${m}:${String(s).padStart(2, '0')}`;
+    return m ? `${m} min` : `${s} s`;
+  }
+
+  const queue = [];
+  let popupBusy = false;
+  function popup(p) {
+    queue.push(p);
+    if (!popupBusy) nextPopup();
+  }
+  function nextPopup() {
+    const p = queue.shift();
+    if (!p) {
+      popupBusy = false;
+      stage.classList.remove('popping');
+      return;
+    }
+    stage.classList.add('popping');
+    popupBusy = true;
+    const el = document.createElement('div');
+    el.className = 'popup glow' + (p.ms < 0 ? ' minus' : '');
+    const plus = document.createElement('div');
+    plus.className = 'plus';
+    plus.textContent = (p.ms < 0 ? '−' : '+') + fmtAdded(p.ms);
+    const who = document.createElement('div');
+    who.className = 'who script';
+    who.textContent = p.user && p.label ? `${p.user} · ${p.label}` : (p.user || p.label || '');
+    el.append(plus, who);
+    $('popups').appendChild(el);
+    stage.classList.remove('flash');
+    void stage.offsetWidth;
+    stage.classList.add('flash');
+    // Plusieurs événements d'affilée : on accélère pour ne pas prendre de retard.
+    const speed = queue.length > 3 ? 0.45 : 1;
+    el.style.animationDuration = `${3.4 * speed}s`;
+    setTimeout(() => { el.remove(); nextPopup(); }, 3400 * speed);
+  }
+
+  function update(next) {
+    clockOffset = next.serverNow ? next.serverNow - Date.now() : 0;
+    view = next;
+    applyDisplay(next.display || {});
+    setTexts();
+    render();
+    fit();
+    stage.classList.add('ready');
+  }
+
+  // ---------- Mode hors ligne (Starting Soon sans serveur) ----------
+  function startOffline() {
+    const minutes = Number(params.get('min') ?? 5);
+    const at = params.get('at'); // « 20:30 »
+    let endAt = Date.now() + Math.max(0, minutes) * 60000;
+    if (at && /^\d{1,2}[:h]\d{2}$/.test(at)) {
+      const [h, m] = at.split(/[:h]/).map(Number);
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      if (d.getTime() < Date.now() - 6 * 3600 * 1000) d.setDate(d.getDate() + 1);
+      endAt = d.getTime();
+    }
+    const scale = Number(params.get('scale'));
+    const accent = params.get('accent');
+    update({
+      mode: 'countdown',
+      status: 'running',
+      endAt,
+      remainingMs: 0,
+      countdown: {
+        top: params.get('top') ?? 'le stream commence dans',
+        bottom: params.get('bottom') ?? '',
+        endText: params.get('end') ?? 'Lunaria s’éveille…',
+      },
+      athon: { title: '', rules: [], multiplier: 1 },
+      display: {
+        accent: /^#?[0-9a-f]{6}$/i.test(accent || '') ? '#' + accent.replace('#', '') : undefined,
+        scale: scale > 0 ? scale : undefined,
+      },
+    });
+  }
+
+  // ---------- Mode connecté (serveur Lunaria) ----------
+  function startOnline() {
+    const es = new EventSource('api/stream');
+    es.addEventListener('state', (e) => update(JSON.parse(e.data)));
+    es.addEventListener('added', (e) => {
+      if (!view || !view.display || view.display.showPopups !== false) popup(JSON.parse(e.data));
+    });
+  }
+
+  if (params.has('bg')) document.body.classList.add('preview-bg');
+  document.fonts.ready.then(() => (offline ? startOffline() : startOnline()));
+  setInterval(render, 200);
+
+})();
+</script>
+</body>
+</html>

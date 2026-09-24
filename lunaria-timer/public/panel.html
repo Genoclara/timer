@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lunaria Timer</title>
+<link rel="stylesheet" href="fonts.css">
+<style>
+  :root {
+    --bg: #0c0317;
+    --card: rgba(38, 14, 72, .62);
+    --card-border: rgba(190, 140, 255, .22);
+    --text: #f3eaff;
+    --muted: #b9a5d6;
+    --accent: #b36bff;
+    --accent-2: #8a3dff;
+    --good: #7fe0b0;
+    --warn: #ffcf7a;
+    --bad: #ff8fa8;
+    --field: rgba(10, 2, 22, .6);
+  }
+  * { box-sizing: border-box; }
+  /* color-scheme sur les champs seulement : sinon l'aperçu du timer (iframe) perd sa transparence */
+  input, select, textarea { color-scheme: dark; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(138, 61, 255, .35), transparent 55%),
+      radial-gradient(ellipse at 90% 100%, rgba(179, 107, 255, .25), transparent 50%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--card-border);
+    background: rgba(12, 3, 23, .6);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  header h1 {
+    margin: 0;
+    font: 600 22px "Lunaria Serif", Georgia, serif;
+    letter-spacing: .08em;
+    text-shadow: 0 0 12px var(--accent);
+  }
+  header .sub { color: var(--muted); font-family: "Lunaria Script", cursive; font-size: 22px; }
+  header .grow { flex: 1; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    border-radius: 99px;
+    background: var(--field);
+    border: 1px solid var(--card-border);
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .dot.wait { background: var(--warn); }
+  .dot.err { background: var(--bad); }
+
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 22px 16px 60px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .col { display: grid; gap: 18px; min-width: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  section {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 18px 18px 20px;
+    min-width: 0;
+  }
+  section h2 {
+    margin: 0 0 14px;
+    font: 600 16px "Lunaria Serif", Georgia, serif;
+    letter-spacing: .1em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section h2 small { font: 13px system-ui, sans-serif; letter-spacing: 0; color: var(--muted); margin-left: auto; }
+  h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  p.help { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  p.help a { color: #d9b5ff; }
+  code { background: var(--field); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
+
+  .preview {
+    position: relative;
+    aspect-ratio: 1200 / 330;
+    border-radius: 12px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 60%, #3a0f6e 0%, #1a0536 50%, #0b0114 100%);
+    background-size: cover;
+    background-position: center 80%;
+    border: 1px solid var(--card-border);
+  }
+  .preview iframe {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1200px;
+    height: 330px;
+    border: 0;
+    transform-origin: 0 0;
+    background: transparent;
+  }
+  .big-time {
+    font: 600 34px "Lunaria Serif", Georgia, serif;
+    letter-spacing: .06em;
+    font-variant-numeric: tabular-nums;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row + .row { margin-top: 10px; }
+  .between { justify-content: space-between; }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--text);
+    background: rgba(179, 107, 255, .14);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .05s;
+  }
+  button:hover { background: rgba(179, 107, 255, .28); border-color: rgba(190, 140, 255, .5); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+  button.primary:hover { filter: brightness(1.12); }
+  button.danger { color: var(--bad); }
+  button.small { padding: 5px 10px; font-size: 13px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { flex: 1 1 auto; }
+  .seg button.on { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+
+  label { display: block; font-size: 13px; color: var(--muted); }
+  label > span { display: block; margin-bottom: 4px; }
+  input[type=text], input[type=number], input[type=password], input[type=time], select {
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--field);
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    padding: 8px 10px;
+  }
+  input[type=color] { width: 54px; height: 38px; border: 1px solid var(--card-border); border-radius: 9px; background: var(--field); padding: 3px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 560px) { .grid3, .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; cursor: pointer; }
+  .check input { width: 17px; height: 17px; accent-color: var(--accent); }
+  .inline { display: flex; align-items: center; gap: 6px; }
+  .inline input { width: 90px; }
+  .unit { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+  .log { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow: auto; font-size: 13.5px; }
+  .log li { padding: 7px 2px; border-bottom: 1px solid rgba(190, 140, 255, .1); display: flex; gap: 10px; }
+  .log time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  .log .event { color: var(--text); }
+  .log .system { color: var(--muted); font-style: italic; }
+  .log .test { opacity: .7; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--field); border-radius: 10px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+
+  .copy { display: flex; gap: 8px; }
+  .copy input { flex: 1; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #2a0f50;
+    border: 1px solid var(--card-border);
+    padding: 10px 18px;
+    border-radius: 12px;
+    opacity: 0;
+    transition: .25s;
+    pointer-events: none;
+    z-index: 20;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .toast.err { border-color: var(--bad); color: var(--bad); }
+
+  .login { max-width: 440px; margin: 12vh auto; padding: 0 16px; }
+  @media (max-width: 600px) {
+    header { padding: 14px 16px; }
+    header .sub { display: none; }
+  }
+  .hidden { display: none !important; }
+  .full { grid-column: 1 / -1; }
+  ol.steps { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; }
+  ol.steps li { margin: 4px 0; }
+  ol.steps b { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lunaria Timer</h1>
+  <span class="sub">panneau du royaume</span>
+  <span class="grow"></span>
+  <span class="pill" id="connPill"><span class="dot" id="connDot"></span><span id="connText">…</span></span>
+</header>
+
+<!-- ============ Connexion (mode serveur) ============ -->
+<div class="login hidden" id="loginView">
+  <section>
+    <h2>Connexion</h2>
+    <form id="loginForm">
+      <label><span>Clé du panneau</span><input type="password" id="loginKey" autocomplete="current-password" required></label>
+      <p class="help">La clé s'affiche dans la console du serveur au premier démarrage. Elle est aussi dans <code>data/config.json</code>, champ <code>adminKey</code>.</p>
+      <div class="row" style="margin-top:14px"><button class="primary" type="submit">Entrer</button></div>
+    </form>
+  </section>
+</div>
+
+<!-- ============ Mode hors ligne (fichier ouvert sur le PC) ============ -->
+<main class="hidden" id="offlineView">
+  <div class="col">
+    <section>
+      <h2>Aperçu <small><label class="check" style="display:inline-flex"><input type="file" id="offBgFile" accept="image/*" class="hidden">
+        <button class="small" type="button" id="offBgBtn">Mettre mon image de fond</button></label></small></h2>
+      <div class="preview" id="offPreview"><iframe id="offFrame" title="Aperçu du timer"></iframe></div>
+      <p class="help">L'image de fond sert seulement à l'aperçu. Elle n'est enregistrée nulle part.</p>
+    </section>
+    <section>
+      <h2>Adresse à coller dans OBS</h2>
+      <div class="copy"><input type="text" id="offUrl" readonly><button class="primary" type="button" id="offCopy">Copier</button></div>
+      <ol class="steps">
+        <li>Dans OBS, sur votre scène Starting Soon : <b>+ → Navigateur</b>.</li>
+        <li><b>Décochez « Fichier local »</b> et collez l'adresse dans le champ <b>URL</b>.</li>
+        <li>Largeur <b>1200</b>, hauteur <b>330</b>. Placez la source sous « follow for more ».</li>
+        <li>Cochez <b>« Actualiser le navigateur quand la scène devient active »</b> : le compte à rebours repart à chaque fois que vous affichez la scène.</li>
+      </ol>
+      <p class="help">Tout fonctionne sans Internet ni serveur. Si vous déplacez le dossier du timer, recopiez l'adresse.</p>
+    </section>
+  </div>
+  <div class="col">
+    <section>
+      <h2>Starting Soon (hors ligne)</h2>
+      <div class="seg" id="offType">
+        <button type="button" data-v="min" class="on">Durée</button>
+        <button type="button" data-v="at">Heure fixe</button>
+      </div>
+      <div class="grid2" style="margin-top:12px">
+        <label id="offMinWrap"><span>Durée (minutes)</span><input type="number" id="offMin" min="0" step="0.5" value="5"></label>
+        <label id="offAtWrap" class="hidden"><span>Heure de début du stream</span><input type="time" id="offAt" value="20:00"></label>
+      </div>
+      <p class="help" id="offTypeHelp">Le compte à rebours démarre quand la scène s'affiche.</p>
+      <h3>Textes</h3>
+      <div class="grid2">
+        <label class="full"><span>Au-dessus du timer</span><input type="text" id="offTop" value="le stream commence dans"></label>
+        <label class="full"><span>En dessous (facultatif)</span><input type="text" id="offBottom" value=""></label>
+        <label class="full"><span>À la fin du compte à rebours</span><input type="text" id="offEnd" value="Lunaria s’éveille…"></label>
+      </div>
+      <h3>Apparence</h3>
+      <div class="grid2">
+        <label><span>Couleur de la lueur</span><input type="color" id="offAccent" value="#b36bff"></label>
+        <label><span>Taille <b id="offScaleVal">100 %</b></span><input type="range" id="offScale" min="0.5" max="1.6" step="0.05" value="1"></label>
+      </div>
+    </section>
+    <section>
+      <h2>Et le Lunariathon ?</h2>
+      <p class="help" style="margin-top:0">Les modes Subathon, Donathon et Lunariathon ont besoin du serveur, hébergé sur votre bot Sparked Host, pour recevoir les subs et les dons de StreamElements. Suivez le fichier <code>LISEZ-MOI.md</code> puis ouvrez <code>http://ip-du-serveur:port/panel</code>.</p>
+    </section>
+  </div>
+</main>
+
+<!-- ============ Panneau complet (mode serveur) ============ -->
+<main class="hidden" id="onlineView">
+  <div class="col">
+    <section>
+      <h2>En direct <small id="modeLabel"></small></h2>
+      <div class="preview" id="livePreview"><iframe id="liveFrame" title="Timer en direct"></iframe></div>
+      <div class="row between" style="margin-top:14px">
+        <div class="big-time" id="bigTime">--:--</div>
+        <div class="row">
+          <button class="primary" type="button" id="btnStart">Lancer</button>
+          <button type="button" id="btnReset">Réinitialiser</button>
+        </div>
+      </div>
+      <h3>Ajouter / retirer du temps</h3>
+      <div class="row">
+        <button type="button" class="small" data-add="60">+1 min</button>
+        <button type="button" class="small" data-add="300">+5 min</button>
+        <button type="button" class="small" data-add="600">+10 min</button>
+        <button type="button" class="small" data-add="1800">+30 min</button>
+        <button type="button" class="small" data-add="3600">+1 h</button>
+        <button type="button" class="small" data-add="-60">−1 min</button>
+        <button type="button" class="small" data-add="-300">−5 min</button>
+      </div>
+      <div class="row">
+        <div class="inline"><input type="number" id="customMin" min="0" step="1" value="15" aria-label="Minutes"><span class="unit">min</span></div>
+        <button type="button" class="small" id="btnCustomAdd">Ajouter</button>
+        <button type="button" class="small" id="btnCustomSub">Retirer</button>
+        <span class="grow" style="flex:1"></span>
+        <div class="inline"><input type="text" id="setTime" placeholder="2:00:00" style="width:110px" aria-label="Temps restant"></div>
+        <button type="button" class="small" id="btnSet">Régler le temps</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Mode</h2>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="countdown">Starting Soon</button>
+        <button type="button" data-mode="athon" data-kind="lunariathon">Lunariathon</button>
+        <button type="button" data-mode="athon" data-kind="subathon">Subathon</button>
+        <button type="button" data-mode="athon" data-kind="donathon">Donathon</button>
+      </div>
+      <p class="help" id="modeHelp"></p>
+
+      <div id="countdownSettings">
+        <h3>Starting Soon</h3>
+        <div class="grid2">
+          <label><span>Durée (minutes)</span><input type="number" min="0" step="0.5" data-cfg="countdown.minutes"></label>
+          <label><span>Texte de fin</span><input type="text" data-cfg="countdown.endText"></label>
+          <label class="full"><span>Au-dessus du timer</span><input type="text" data-cfg="countdown.top"></label>
+          <label class="full"><span>En dessous (facultatif)</span><input type="text" data-cfg="countdown.bottom"></label>
+        </div>
+      </div>
+
+      <div id="athonSettings">
+        <h3>Textes</h3>
+        <div class="grid2">
+          <label><span>Titre affiché</span><input type="text" id="kindTitle"></label>
+          <label><span>Durée de départ (minutes)</span><input type="number" min="0" step="1" data-cfg="athon.startMinutes"></label>
+          <label class="full"><span>Sous le timer</span><input type="text" data-cfg="athon.subtitle"></label>
+          <label class="full"><span>Texte de fin</span><input type="text" data-cfg="athon.endText"></label>
+        </div>
+
+        <h3>Ce qui ajoute du temps en <span id="kindName"></span></h3>
+        <div class="row" id="countsRow">
+          <label class="check"><input type="checkbox" data-count="subs"> Subs</label>
+          <label class="check"><input type="checkbox" data-count="gifts"> Subs offerts</label>
+          <label class="check"><input type="checkbox" data-count="tips"> Dons</label>
+          <label class="check"><input type="checkbox" data-count="bits"> Bits</label>
+        </div>
+
+        <h3>Temps ajouté</h3>
+        <div class="grid4">
+          <label><span>Sub T1</span><div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.t1" data-minutes><span class="unit">min</span></div></label>
+          <label><span>Sub T2</span><div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.t2" data-minutes><span class="unit">min</span></div></label>
+          <label><span>Sub T3</span><div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.t3" data-minutes><span class="unit">min</span></div></label>
+          <label><span>Sub Prime</span><div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.prime" data-minutes><span class="unit">min</span></div></label>
+        </div>
+        <p class="help">Un sub offert rapporte le même temps qu'un sub du même tier (10 subs offerts T1 = 10 × T1).</p>
+        <div class="grid2" style="margin-top:12px">
+          <label><span>Dons</span>
+            <div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.tipSeconds" data-minutes><span class="unit">min par</span>
+            <input type="number" min="0.01" step="0.5" data-cfg="athon.values.tipPer" style="width:70px"><input type="text" data-cfg="athon.currency" style="width:52px" aria-label="Devise"></div></label>
+          <label><span>Don minimum</span><div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.tipMin"><span class="unit" data-currency></span></div></label>
+          <label><span>Bits</span>
+            <div class="inline"><input type="number" min="0" step="0.5" data-cfg="athon.values.bitsSeconds" data-minutes><span class="unit">min par</span>
+            <input type="number" min="1" step="1" data-cfg="athon.values.bitsPer" style="width:80px"><span class="unit">bits</span></div></label>
+          <label><span>Durée totale maximale</span><div class="inline"><input type="number" min="0" step="1" data-cfg="athon.maxHours"><span class="unit">h (0 = sans limite)</span></div></label>
+        </div>
+        <p class="help">Les dons et les bits sont proportionnels : avec 1 min par 1 €, un don de 7,50 € ajoute 7 min 30 s.</p>
+
+        <h3>Pleine lune (bonus)</h3>
+        <div class="seg" id="multSeg">
+          <button type="button" data-mult="1">Normal</button>
+          <button type="button" data-mult="1.5">×1,5</button>
+          <button type="button" data-mult="2">×2</button>
+          <button type="button" data-mult="3">×3</button>
+        </div>
+        <p class="help">Multiplie le temps de tous les événements, par exemple pendant une heure spéciale. Le bonus s'affiche sur le stream.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Apparence</h2>
+      <div class="grid2">
+        <label><span>Couleur de la lueur</span><input type="color" data-cfg="display.accent"></label>
+        <label><span>Taille <b id="scaleVal"></b></span><input type="range" min="0.5" max="1.6" step="0.05" data-cfg="display.scale"></label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label class="check"><input type="checkbox" data-cfg="display.showTitle"> Titre (-athon)</label>
+        <label class="check"><input type="checkbox" data-cfg="display.showRules"> Règles sous le timer</label>
+        <label class="check"><input type="checkbox" data-cfg="display.showPopups"> Animation « +5 min »</label>
+        <label class="check"><input type="checkbox" data-cfg="display.showStats"> Compteur de subs, bits et dons</label>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section>
+      <h2>StreamElements <small><span class="pill"><span class="dot" id="seDot"></span><span id="seText">…</span></span></small></h2>
+      <label class="check"><input type="checkbox" data-cfg="streamelements.enabled"> Recevoir les subs, bits et dons automatiquement</label>
+      <div class="row" style="margin-top:12px;flex-wrap:nowrap">
+        <input type="password" id="jwt" placeholder="Collez votre JWT Token ici" autocomplete="off" style="flex:1">
+        <button type="button" class="primary" id="btnJwt">Enregistrer</button>
+      </div>
+      <p class="help" id="jwtState"></p>
+      <p class="help">Où trouver le jeton : <a href="https://streamelements.com/dashboard/account/channels" target="_blank" rel="noopener">streamelements.com → Account → Channels</a> → « Show secrets » → <b>JWT Token</b>. Ne le montrez jamais en stream : le panneau ne le réaffiche pas une fois enregistré.</p>
+      <div class="row" style="margin-top:10px"><button type="button" class="small" id="btnReconnect">Reconnecter</button></div>
+    </section>
+
+    <section>
+      <h2>Tester <small>ajoute vraiment du temps</small></h2>
+      <div class="row">
+        <button type="button" class="small" data-test='{"type":"sub","tier":"1"}'>Sub T1</button>
+        <button type="button" class="small" data-test='{"type":"sub","tier":"2"}'>Sub T2</button>
+        <button type="button" class="small" data-test='{"type":"sub","tier":"3"}'>Sub T3</button>
+        <button type="button" class="small" data-test='{"type":"sub","tier":"prime"}'>Prime</button>
+        <button type="button" class="small" data-test='{"type":"gift","tier":"1","count":5}'>5 subs offerts</button>
+        <button type="button" class="small" data-test='{"type":"tip","amount":5}'>Don 5</button>
+        <button type="button" class="small" data-test='{"type":"bits","amount":500}'>500 bits</button>
+      </div>
+      <p class="help">Les tests ne sont pas comptés dans les statistiques. Retirez le temps ajouté avec les boutons « − » si besoin.</p>
+    </section>
+
+    <section>
+      <h2>Journal <small><button type="button" class="small danger" id="btnResetStats">Remettre à zéro</button></small></h2>
+      <div class="stats" id="statsBox"></div>
+      <ul class="log" id="log"></ul>
+    </section>
+
+    <section>
+      <h2>Liens</h2>
+      <label><span>Source navigateur OBS (1200 × 330)</span></label>
+      <div class="copy"><input type="text" id="overlayUrl" readonly><button type="button" class="small" data-copy="overlayUrl">Copier</button></div>
+      <p class="help">Cette adresse ne contient aucun secret. Vous pouvez la mettre dans OBS, sur la scène Starting Soon et sur la scène du Lunariathon.</p>
+      <h3>Pour votre bot Discord</h3>
+      <p class="help" style="margin-top:0">Le bot peut ajouter du temps avec <code>POST /api/event</code> et l'en-tête <code>x-lunaria-key</code>. Exemples dans <code>LISEZ-MOI.md</code>.</p>
+      <div class="row" style="margin-top:12px"><button type="button" class="small" id="btnLogout">Se déconnecter</button></div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const offline = location.protocol === 'file:';
+  const KEY_STORE = 'lunaria-panel-key';
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* navigation privée */ } },
+    del(k) { try { localStorage.removeItem(k); } catch (_) { /* navigation privée */ } },
+  };
+
+  let toastTimer;
+  function toast(msg, isErr) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.toggle('err', !!isErr);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  function setConn(state, text) {
+    $('connDot').className = 'dot ' + (state === 'ok' ? 'ok' : state === 'wait' ? 'wait' : state === 'err' ? 'err' : '');
+    $('connText').textContent = text;
+  }
+
+  async function copyField(input) {
+    input.select();
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch (_) {
+      document.execCommand('copy');
+    }
+    toast('Copié ✓');
+  }
+
+  // Met l'iframe d'aperçu (1200 × 330) à l'échelle de son cadre.
+  function fitFrame(box, frame) {
+    const fit = () => { frame.style.transform = `scale(${box.clientWidth / 1200})`; };
+    new ResizeObserver(fit).observe(box);
+    fit();
+  }
+
+  // =====================================================================
+  //  Mode hors ligne : générateur d'adresse pour le Starting Soon
+  // =====================================================================
+  function initOffline() {
+    $('offlineView').classList.remove('hidden');
+    setConn('', 'Hors ligne');
+    const frame = $('offFrame');
+    fitFrame($('offPreview'), frame);
+    let type = 'min';
+    const saved = (() => { try { return JSON.parse(store.get('lunaria-offline') || '{}'); } catch (_) { return {}; } })();
+    for (const id of ['offMin', 'offAt', 'offTop', 'offBottom', 'offEnd', 'offAccent', 'offScale']) {
+      if (saved[id] != null) $(id).value = saved[id];
+    }
+    if (saved.type) type = saved.type;
+
+    function overlayBase() {
+      return location.href.split(/[?#]/)[0].replace(/[^/]*$/, 'overlay.html');
+    }
+    function build() {
+      const q = new URLSearchParams();
+      if (type === 'at') q.set('at', $('offAt').value || '20:00');
+      else q.set('min', String(Math.max(0, Number($('offMin').value) || 0)));
+      q.set('top', $('offTop').value);
+      if ($('offBottom').value) q.set('bottom', $('offBottom').value);
+      q.set('end', $('offEnd').value);
+      q.set('accent', $('offAccent').value.replace('#', ''));
+      q.set('scale', $('offScale').value);
+      return overlayBase() + '?' + q.toString().replace(/\+/g, '%20');
+    }
+    let reloadTimer;
+    function refresh() {
+      document.querySelectorAll('#offType button').forEach((b) => b.classList.toggle('on', b.dataset.v === type));
+      $('offMinWrap').classList.toggle('hidden', type !== 'min');
+      $('offAtWrap').classList.toggle('hidden', type !== 'at');
+      $('offTypeHelp').textContent = type === 'min'
+        ? 'Le compte à rebours démarre quand la scène s’affiche.'
+        : 'Le compte à rebours vise cette heure, quel que soit le moment où la scène s’affiche.';
+      $('offScaleVal').textContent = Math.round($('offScale').value * 100) + ' %';
+      const url = build();
+      $('offUrl').value = url;
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => { frame.src = url; }, 250);
+      const data = { type };
+      for (const id of ['offMin', 'offAt', 'offTop', 'offBottom', 'offEnd', 'offAccent', 'offScale']) data[id] = $(id).value;
+      store.set('lunaria-offline', JSON.stringify(data));
+    }
+    document.querySelectorAll('#offType button').forEach((b) => b.addEventListener('click', () => { type = b.dataset.v; refresh(); }));
+    $('offlineView').addEventListener('input', refresh);
+    $('offCopy').addEventListener('click', () => copyField($('offUrl')));
+    $('offBgBtn').addEventListener('click', () => $('offBgFile').click());
+    $('offBgFile').addEventListener('change', () => {
+      const f = $('offBgFile').files[0];
+      if (f) $('offPreview').style.backgroundImage = `url("${URL.createObjectURL(f)}")`;
+    });
+    refresh();
+  }
+
+  // =====================================================================
+  //  Mode serveur : panneau complet
+  // =====================================================================
+  let key = store.get(KEY_STORE) || '';
+  let data = null; // { config, state, log, se }
+  let es = null;
+
+  async function api(path, body) {
+    const res = await fetch(path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'x-lunaria-key': key, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      logout();
+      throw new Error('Clé incorrecte');
+    }
+    if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
+    return json;
+  }
+
+  function logout() {
+    store.del(KEY_STORE);
+    key = '';
+    if (es) es.close();
+    $('onlineView').classList.add('hidden');
+    $('loginView').classList.remove('hidden');
+    setConn('', 'Déconnecté');
+  }
+
+  async function login() {
+    try {
+      data = await api('/api/admin/config');
+    } catch (err) {
+      if (key) toast(err.message, true);
+      $('loginView').classList.remove('hidden');
+      setConn('', 'Déconnecté');
+      return;
+    }
+    store.set(KEY_STORE, key);
+    $('loginView').classList.add('hidden');
+    $('onlineView').classList.remove('hidden');
+    $('overlayUrl').value = new URL('overlay', location.href).href;
+    $('liveFrame').src = 'overlay';
+    fitFrame($('livePreview'), $('liveFrame'));
+    fillForm();
+    renderAll();
+    connectStream();
+  }
+
+  function connectStream() {
+    if (es) es.close();
+    es = new EventSource('/api/stream?key=' + encodeURIComponent(key));
+    es.onopen = () => setConn('ok', 'Connecté au serveur');
+    es.onerror = () => setConn('wait', 'Reconnexion…');
+    es.addEventListener('state', (e) => {
+      data.state = JSON.parse(e.data);
+      data.state.clientAt = Date.now();
+      renderLive();
+    });
+    es.addEventListener('log', (e) => { data.log = JSON.parse(e.data); renderLog(); });
+    es.addEventListener('se', (e) => { data.se = JSON.parse(e.data); renderSe(); });
+  }
+
+  const getPath = (obj, p) => p.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+  function setPath(obj, p, v) {
+    const parts = p.split('.');
+    let o = obj;
+    for (const k of parts.slice(0, -1)) o = o[k] = o[k] || {};
+    o[parts[parts.length - 1]] = v;
+    return obj;
+  }
+
+  function fillForm() {
+    const c = data.config;
+    document.querySelectorAll('[data-cfg]').forEach((el) => {
+      if (el === document.activeElement) return;
+      let v = getPath(c, el.dataset.cfg);
+      if (el.type === 'checkbox') el.checked = !!v;
+      else {
+        if ('minutes' in el.dataset) v = Math.round((v / 60) * 100) / 100;
+        el.value = v == null ? '' : v;
+      }
+    });
+    const kind = c.athon.kind;
+    if (document.activeElement !== $('kindTitle')) $('kindTitle').value = c.athon.titles[kind] || '';
+    document.querySelectorAll('[data-count]').forEach((el) => { el.checked = !!c.athon.counts[kind][el.dataset.count]; });
+    document.querySelectorAll('[data-currency]').forEach((el) => { el.textContent = c.athon.currency; });
+    $('scaleVal').textContent = Math.round(c.display.scale * 100) + ' %';
+  }
+
+  function renderAll() {
+    renderLive();
+    renderLog();
+    renderSe();
+  }
+
+  const KIND_LABEL = { lunariathon: 'Lunariathon', subathon: 'Subathon', donathon: 'Donathon' };
+  const STATUS_LABEL = { idle: 'prêt', running: 'en cours', paused: 'en pause', ended: 'terminé' };
+
+  function remainingMs() {
+    const s = data.state;
+    if (s.status === 'running') return Math.max(0, s.endAt - (s.serverNow + (Date.now() - s.clientAt)));
+    return s.status === 'ended' ? 0 : s.remainingMs;
+  }
+
+  function fmt(ms) {
+    const t = Math.ceil(ms / 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(Math.floor(t / 3600))}:${pad(Math.floor((t % 3600) / 60))}:${pad(t % 60)}`;
+  }
+
+  function renderLive() {
+    const s = data.state;
+    if (!s.clientAt) s.clientAt = Date.now();
+    const c = data.config;
+    const athon = s.mode === 'athon';
+    $('modeLabel').textContent = `${athon ? KIND_LABEL[c.athon.kind] : 'Starting Soon'} · ${STATUS_LABEL[s.status]}`;
+    $('btnStart').textContent = s.status === 'running' ? 'Pause' : s.status === 'paused' ? 'Reprendre' : 'Lancer';
+    document.querySelectorAll('#modeSeg button').forEach((b) => {
+      b.classList.toggle('on', b.dataset.mode === s.mode && (!athon || b.dataset.kind === c.athon.kind));
+    });
+    $('countdownSettings').classList.toggle('hidden', athon);
+    $('athonSettings').classList.toggle('hidden', !athon);
+    $('kindName').textContent = KIND_LABEL[c.athon.kind];
+    $('modeHelp').textContent = athon
+      ? 'Les subs, dons et bits cochés plus bas ajoutent du temps automatiquement. Passer d’un -athon à l’autre garde le timer en cours.'
+      : 'Simple compte à rebours avant le début du stream. Les subs et les dons n’ajoutent pas de temps dans ce mode.';
+    document.querySelectorAll('#multSeg button').forEach((b) => b.classList.toggle('on', Number(b.dataset.mult) === c.athon.multiplier));
+    const st = s.stats || {};
+    const box = $('statsBox');
+    box.innerHTML = '';
+    [
+      [st.t1 + st.t2 + st.t3 + st.prime, 'subs'],
+      [st.gifts, 'subs offerts'],
+      [String(st.tips).replace('.', ','), 'de dons'],
+      [st.bits, 'bits'],
+    ].forEach(([v, l]) => {
+      const d = document.createElement('div');
+      d.className = 'stat';
+      const b = document.createElement('b');
+      b.textContent = v;
+      const sp = document.createElement('span');
+      sp.textContent = l;
+      d.append(b, sp);
+      box.appendChild(d);
+    });
+    tickBig();
+  }
+
+  function tickBig() {
+    if (data && data.state) $('bigTime').textContent = fmt(remainingMs());
+  }
+  setInterval(tickBig, 250);
+
+  function renderLog() {
+    const ul = $('log');
+    ul.innerHTML = '';
+    for (const e of data.log || []) {
+      const li = document.createElement('li');
+      const t = document.createElement('time');
+      t.textContent = new Date(e.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const sp = document.createElement('span');
+      sp.className = (e.kind === 'system' ? 'system' : 'event') + (e.test ? ' test' : '');
+      sp.textContent = e.text;
+      li.append(t, sp);
+      ul.appendChild(li);
+    }
+    if (!ul.children.length) {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="system">Rien pour le moment.</span>';
+      ul.appendChild(li);
+    }
+  }
+
+  function renderSe() {
+    const se = data.se || { state: 'off', message: '' };
+    $('seDot').className = 'dot ' + ({ connected: 'ok', connecting: 'wait', error: 'err' }[se.state] || '');
+    $('seText').textContent = { connected: 'connecté', connecting: 'connexion…', error: 'erreur', off: 'désactivé' }[se.state] || se.state;
+    $('jwtState').textContent = (data.config.streamelements.hasJwt ? 'Jeton enregistré ✓. ' : 'Aucun jeton enregistré. ') + (se.message || '');
+  }
+
+  async function saveConfig(patch) {
+    try {
+      data = { ...data, ...(await api('/api/admin/config', patch)) };
+      fillForm();
+      renderAll();
+      toast('Enregistré ✓');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function action(body) {
+    try {
+      const r = await api('/api/admin/action', body);
+      data = { ...data, ...r };
+      data.state.clientAt = Date.now();
+      renderAll();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  function parseDuration(txt) {
+    const parts = String(txt).trim().split(':').map(Number);
+    if (!parts.length || parts.some((n) => !Number.isFinite(n) || n < 0)) return null;
+    return parts.reduce((acc, n) => acc * 60 + n, 0) * (parts.length === 1 ? 60 : 1);
+  }
+
+  function initOnline() {
+    $('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      key = $('loginKey').value.trim();
+      login();
+    });
+
+    // Champs de configuration : enregistrement automatique.
+    document.querySelectorAll('[data-cfg]').forEach((el) => {
+      el.addEventListener('change', () => {
+        let v;
+        if (el.type === 'checkbox') v = el.checked;
+        else if (el.type === 'number' || el.type === 'range') {
+          v = Number(el.value);
+          if (!Number.isFinite(v)) return toast('Nombre invalide', true);
+          if ('minutes' in el.dataset) v = Math.round(v * 60);
+        } else v = el.value;
+        saveConfig(setPath({}, el.dataset.cfg, v));
+      });
+    });
+    document.querySelector('[data-cfg="display.scale"]').addEventListener('input', (e) => {
+      $('scaleVal').textContent = Math.round(e.target.value * 100) + ' %';
+    });
+    $('kindTitle').addEventListener('change', () => {
+      saveConfig({ athon: { titles: { [data.config.athon.kind]: $('kindTitle').value } } });
+    });
+    document.querySelectorAll('[data-count]').forEach((el) => el.addEventListener('change', () => {
+      saveConfig({ athon: { counts: { [data.config.athon.kind]: { [el.dataset.count]: el.checked } } } });
+    }));
+    document.querySelectorAll('#multSeg button').forEach((b) => b.addEventListener('click', () => {
+      saveConfig({ athon: { multiplier: Number(b.dataset.mult) } });
+    }));
+
+    document.querySelectorAll('#modeSeg button').forEach((b) => b.addEventListener('click', async () => {
+      const s = data.state;
+      const target = b.dataset.mode;
+      if (target === 'athon') await saveConfig({ athon: { kind: b.dataset.kind } });
+      if (target !== s.mode) {
+        if (s.status === 'running' || s.status === 'paused') {
+          if (!confirm('Changer de mode remet le timer à zéro. Continuer ?')) return;
+        }
+        await action({ action: 'mode', mode: target });
+      }
+    }));
+
+    $('btnStart').addEventListener('click', () => action({ action: data.state.status === 'running' ? 'pause' : 'start' }));
+    $('btnReset').addEventListener('click', () => {
+      if (data.state.status !== 'idle' && !confirm('Remettre le timer à sa durée de départ ?')) return;
+      action({ action: 'reset' });
+    });
+    document.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => action({ action: 'add', seconds: Number(b.dataset.add) })));
+    $('btnCustomAdd').addEventListener('click', () => action({ action: 'add', seconds: Number($('customMin').value) * 60 }));
+    $('btnCustomSub').addEventListener('click', () => action({ action: 'add', seconds: -Number($('customMin').value) * 60 }));
+    $('btnSet').addEventListener('click', () => {
+      const sec = parseDuration($('setTime').value);
+      if (sec == null) return toast('Format attendu : 1:30:00, 45:00 ou 90 (minutes)', true);
+      action({ action: 'set', seconds: sec });
+    });
+    document.querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', () => {
+      action({ action: 'test', event: { ...JSON.parse(b.dataset.test), user: 'Test' } });
+    }));
+    $('btnResetStats').addEventListener('click', () => {
+      if (confirm('Effacer le journal et les statistiques ? Le timer n’est pas modifié.')) action({ action: 'resetStats' });
+    });
+    $('btnJwt').addEventListener('click', () => {
+      const v = $('jwt').value.trim();
+      if (!v) return toast('Collez d’abord le jeton', true);
+      $('jwt').value = '';
+      saveConfig({ streamelements: { jwt: v, enabled: true } });
+    });
+    $('btnReconnect').addEventListener('click', () => action({ action: 'reconnect' }));
+    $('btnLogout').addEventListener('click', logout);
+    document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copyField($(b.dataset.copy))));
+
+    if (key) login();
+    else {
+      $('loginView').classList.remove('hidden');
+      setConn('', 'Déconnecté');
+    }
+  }
+
+  if (offline) initOffline();
+  else initOnline();
+})();
+</script>
+</body>
+</html>

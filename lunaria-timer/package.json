@@ -1,0 +1,14 @@
+{
+  "name": "lunaria-timer",
+  "version": "1.0.0",
+  "description": "Timer Starting Soon et Subathon / Donathon / Lunariathon pour OBS, relié à StreamElements",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16.14"
+  },
+  "license": "MIT",
+  "private": true
+}

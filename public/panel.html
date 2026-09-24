@@ -288,7 +288,7 @@
     </section>
     <section>
       <h2>Et le Lunariathon ?</h2>
-      <p class="help" style="margin-top:0">Les modes Subathon, Donathon et Lunariathon ont besoin du serveur, hébergé sur votre bot Sparked Host, pour recevoir les subs et les dons de StreamElements. Suivez le fichier <code>LISEZ-MOI.md</code> puis ouvrez <code>http://ip-du-serveur:port/panel</code>.</p>
+      <p class="help" style="margin-top:0">Les modes Subathon, Donathon et Lunariathon ont besoin du serveur, hébergé sur votre bot Sparked Host, pour recevoir les subs et les dons de StreamElements. Suivez le fichier <code>README.md</code> puis ouvrez <code>http://ip-du-serveur:port/timer/panel</code>.</p>
     </section>
   </div>
 </main>
@@ -448,7 +448,7 @@
       <div class="copy"><input type="text" id="overlayUrl" readonly><button type="button" class="small" data-copy="overlayUrl">Copier</button></div>
       <p class="help">Cette adresse ne contient aucun secret. Vous pouvez la mettre dans OBS, sur la scène Starting Soon et sur la scène du Lunariathon.</p>
       <h3>Pour votre bot Discord</h3>
-      <p class="help" style="margin-top:0">Le bot peut ajouter du temps avec <code>POST /api/event</code> et l'en-tête <code>x-lunaria-key</code>. Exemples dans <code>LISEZ-MOI.md</code>.</p>
+      <p class="help" style="margin-top:0">Le bot peut ajouter du temps avec <code>POST /api/event</code> et l'en-tête <code>x-lunaria-key</code>. Exemples dans <code>README.md</code>.</p>
       <div class="row" style="margin-top:12px"><button type="button" class="small" id="btnLogout">Se déconnecter</button></div>
     </section>
   </div>
@@ -590,7 +590,7 @@
 
   async function login() {
     try {
-      data = await api('/api/admin/config');
+      data = await api('api/admin/config');
     } catch (err) {
       if (key) toast(err.message, true);
       $('loginView').classList.remove('hidden');
@@ -610,7 +610,7 @@
 
   function connectStream() {
     if (es) es.close();
-    es = new EventSource('/api/stream?key=' + encodeURIComponent(key));
+    es = new EventSource('api/stream?key=' + encodeURIComponent(key));
     es.onopen = () => setConn('ok', 'Connecté au serveur');
     es.onerror = () => setConn('wait', 'Reconnexion…');
     es.addEventListener('state', (e) => {
@@ -742,7 +742,7 @@
 
   async function saveConfig(patch) {
     try {
-      data = { ...data, ...(await api('/api/admin/config', patch)) };
+      data = { ...data, ...(await api('api/admin/config', patch)) };
       fillForm();
       renderAll();
       toast('Enregistré ✓');
@@ -753,7 +753,7 @@
 
   async function action(body) {
     try {
-      const r = await api('/api/admin/action', body);
+      const r = await api('api/admin/action', body);
       data = { ...data, ...r };
       data.state.clientAt = Date.now();
       renderAll();

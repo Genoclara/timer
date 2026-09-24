@@ -192,6 +192,8 @@ function start(options = {}) {
 
   // ---------- Serveur HTTP ----------
   function readBody(req) {
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return Promise.resolve(req.body); // déjà lu par express.json()
+    if (req.readableEnded) return Promise.resolve({});
     return new Promise((resolve, reject) => {
       let size = 0;
       const chunks = [];
@@ -215,13 +217,14 @@ function start(options = {}) {
     res.end(JSON.stringify(data));
   }
 
-  const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://localhost');
-    const p = url.pathname;
+  // Traite une requête. `base` = préfixe d'URL quand le timer partage le serveur web d'un autre module (ex. « /timer »).
+  async function handle(req, res, base = '') {
+    const url = new URL(req.originalUrl || req.url, 'http://localhost');
+    const p = url.pathname.slice(base.length) || '/';
     res.setHeader('X-Content-Type-Options', 'nosniff');
     try {
       if (req.method === 'GET' && (p === '/' || p === '')) {
-        res.writeHead(302, { Location: '/panel' });
+        res.writeHead(302, { Location: `${base}/panel` });
         return res.end();
       }
       if (req.method === 'GET' && STATIC[p]) {
@@ -299,21 +302,48 @@ function start(options = {}) {
     } catch (err) {
       json(res, 400, { error: err.message });
     }
-  });
+  }
 
-  const port = Number(options.port || process.env.LUNARIA_PORT || process.env.SERVER_PORT || process.env.PORT || config.port || 3000);
-  server.listen(port, '0.0.0.0', () => {
-    log(`Serveur lancé sur le port ${port}`);
-    log(`  Panneau : http://<ip-du-serveur>:${port}/panel`);
-    log(`  OBS     : http://<ip-du-serveur>:${port}/overlay`);
-    if (firstRun) log(`  Clé du panneau (à garder secrète) : ${config.adminKey}`);
-    else log('  Clé du panneau : voir data/config.json (champ "adminKey")');
-  });
-  server.on('error', (err) => {
-    log(err.code === 'EADDRINUSE'
-      ? `Le port ${port} est déjà utilisé. Choisissez-en un autre avec la variable LUNARIA_PORT.`
-      : `Erreur du serveur : ${err.message}`);
-  });
+  let server = null;
+  function listen() {
+    if (server) return server;
+    server = http.createServer((req, res) => handle(req, res));
+    const port = Number(options.port || process.env.LUNARIA_PORT || process.env.SERVER_PORT || process.env.PORT || config.port || 3000);
+    server.listen(port, '0.0.0.0', () => {
+      log(`Serveur lancé sur le port ${port}`);
+      log(`  Panneau : http://<ip-du-serveur>:${port}/panel`);
+      log(`  OBS     : http://<ip-du-serveur>:${port}/overlay`);
+    });
+    server.on('error', (err) => {
+      log(err.code === 'EADDRINUSE'
+        ? `Le port ${port} est déjà utilisé (par exemple par un autre site du bot). Branchez le timer sur ce site avec .middleware (voir README.md) ou choisissez un autre port avec LUNARIA_PORT.`
+        : `Erreur du serveur : ${err.message}`);
+    });
+    return server;
+  }
+
+  /** Middleware Express / connect : sert le timer sous `base` (par défaut /timer) sur un serveur existant. */
+  function middleware(base = '/timer') {
+    base = '/' + String(base).replace(/^\/+|\/+$/g, '');
+    return (req, res, next) => {
+      const pathname = (req.originalUrl || req.url).split('?')[0];
+      if (pathname === base || pathname.startsWith(base + '/')) {
+        if (pathname === base) {
+          res.writeHead(302, { Location: `${base}/panel` });
+          return res.end();
+        }
+        return handle(req, res, base);
+      }
+      if (typeof next === 'function') next();
+      else {
+        res.writeHead(404);
+        res.end();
+      }
+    };
+  }
+
+  if (firstRun) log(`Clé du panneau (à garder secrète) : ${config.adminKey}`);
+  else log('Clé du panneau : voir data/config.json (champ "adminKey")');
 
   se.restart();
 
@@ -324,12 +354,15 @@ function start(options = {}) {
     se.stop(true);
     for (const c of clients) c.res.end();
     saveAll();
-    return new Promise((r) => server.close(r));
+    return new Promise((r) => (server ? server.close(r) : r()));
   };
 
   // API utilisable depuis votre bot Discord.
   return {
-    server,
+    get server() { return server; },
+    listen,
+    middleware,
+    handle,
     timer,
     stop,
     /** Ajoute (ou retire) du temps en secondes. */
@@ -341,6 +374,7 @@ function start(options = {}) {
 }
 
 let instance = null;
+let mounted = false;
 function getInstance(options) {
   if (!instance) instance = start(options);
   return instance;
@@ -348,12 +382,23 @@ function getInstance(options) {
 
 if (require.main === module) {
   const inst = getInstance();
+  inst.listen();
   const shutdown = () => inst.stop().then(() => process.exit(0));
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 } else if (!process.env.LUNARIA_NO_AUTOSTART) {
-  // Chargé avec require() depuis un bot : le serveur démarre automatiquement.
+  // Chargé avec require() depuis un bot : le timer démarre, et ouvre son propre port
+  // sauf s'il a été branché sur un serveur existant via .middleware().
   getInstance();
+  setImmediate(() => { if (!mounted) instance.listen(); });
 }
 
-module.exports = { start: getInstance, get lunaria() { return instance; } };
+module.exports = {
+  start: getInstance,
+  get lunaria() { return instance; },
+  /** app.use(require('./timer/server.js').middleware()) : partage le port d'un serveur Express existant. */
+  middleware(base) {
+    mounted = true;
+    return getInstance().middleware(base);
+  },
+};

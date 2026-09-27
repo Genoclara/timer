@@ -9,6 +9,8 @@ Un timer pour OBS aux couleurs de Lunaria. Il a deux usages :
 | --- | --- |
 | `public/overlay.html` | Ce qui s'affiche dans OBS (le timer) |
 | `public/panel.html` | Le panneau de configuration |
+| `public/sound.js` | Les sons intégrés (générés, sans fichier) |
+| `public/sounds/` | Vos propres sons (.mp3…), facultatif |
 | `server.js` + `lib/` | Le serveur pour les modes -athon (aucune installation `npm` nécessaire) |
 | `package.json` | Description du module (aucune dépendance) |
 | `data/` | Créé automatiquement : vos réglages, votre clé et l'état du timer. **Ne le partagez jamais.** |
@@ -25,7 +27,9 @@ Un timer pour OBS aux couleurs de Lunaria. Il a deux usages :
    - **+ → Navigateur** ;
    - **décochez « Fichier local »** et collez l'adresse dans **URL** ;
    - largeur **1200**, hauteur **330** ;
-   - cochez **« Actualiser le navigateur quand la scène devient active »**. Le compte à rebours repart ainsi à chaque fois que vous affichez la scène.
+   - cochez **« Contrôler l'audio via OBS »** si vous avez choisi un son de fin.
+
+   Le compte à rebours repart tout seul du début à chaque fois que la scène passe à l'antenne.
 6. Placez la source sous « follow for more ».
 
 Le fond est transparent : seuls le texte et le timer apparaissent par-dessus votre image. Les polices sont intégrées, donc rien n'est téléchargé.
@@ -131,7 +135,26 @@ Le timer est sauvegardé en continu. Si le bot redémarre pendant un Lunariathon
 
 ---
 
-## 5. Ajouter du temps depuis votre bot Discord
+## 5. Sons, effets et personnalisation
+
+Tout se règle dans le panneau et s'applique en direct.
+
+- **Démarrage automatique du Starting Soon** (section Mode) : le compte à rebours se lance dès que la scène passe à l'antenne dans OBS. Option : repartir du début à chaque affichage.
+- **Pause** : le bouton **Pause / Reprendre** fige le timer, en Starting Soon comme en -athon. « en pause » s'affiche sur le stream (texte modifiable). Les subs et dons reçus pendant la pause ajoutent quand même du temps.
+- **Mode Personnalisé** : un 4e -athon avec le nom de votre choix (champ « Titre affiché ») et ses propres règles.
+- **Subs offerts groupés** : « Pseudo offre 20 subs » donne **une seule** notification « +1 h 40 · Pseudo · 20 subs offerts », même si StreamElements envoie les 20 subs un par un. Il y a environ 3 secondes d'attente, le temps de tous les recevoir.
+- **Sons** : un son quand du temps est ajouté (tic-tac d'horloge, carillon, cristal, poussière magique) et un son de fin, séparé pour le Starting Soon et pour les -athon (cloches, harpe, gong, fanfare, horloge). Le bouton ▶ permet d'écouter. Pour utiliser vos propres sons, déposez des `.mp3` dans `timer/public/sounds/` puis cliquez sur « Actualiser la liste ».
+  > Dans OBS, cochez **« Contrôler l'audio via OBS »** dans la source navigateur, sinon le son ne passe pas sur le stream.
+- **Effets de fin** : pluie d'étoiles, étoiles filantes, gerbe d'étincelles ou halo lunaire (bouton « Voir » pour l'aperçu).
+- **Effets pendant le timer** : animation des chiffres (fondu, glissé, bascule), lueur qui respire, poussière d'étoiles, étoiles de chaque côté, 10 dernières secondes qui battent, étincelles ou éclat quand du temps est ajouté.
+- **Tailles** : réglables séparément pour le timer, le titre, les textes, les règles, le « +5 min » et le texte de fin.
+- **Position et plein écran** : les effets restent dans le cadre de la source OBS. Pour qu'ils couvrent tout l'écran, donnez à la source la taille **1920 × 1080** en plein écran, puis placez le timer avec les curseurs « Position ».
+- **Noms affichés** : renommez Sub, Don, bits, Prime… (par exemple « Éclats de lune » à la place de « bits »). Les nouveaux noms sont utilisés sur le stream et dans le journal.
+- **Tests** (section Tester) : choisissez si les tests ajoutent du temps et s'ils comptent dans les statistiques.
+
+---
+
+## 6. Ajouter du temps depuis votre bot Discord
 
 Depuis le code du bot :
 
@@ -141,6 +164,7 @@ const { lunaria } = require('./timer/server.js'); // depuis un fichier à la rac
 lunaria.addTime(300, 'Bonus Discord');                    // +5 min (négatif pour retirer)
 lunaria.event({ type: 'sub', tier: '1', user: 'Pseudo' }); // comme un vrai sub T1
 lunaria.event({ type: 'tip', amount: 10, user: 'Pseudo' }); // comme un don de 10 €
+lunaria.pause();  lunaria.resume();                        // pause / reprise
 lunaria.remainingSeconds();                                // temps restant
 ```
 
@@ -164,7 +188,14 @@ POST /api/event   {"type": "sub", "tier": "2", "user": "Pseudo"}
 POST /api/event   {"type": "gift", "tier": "1", "count": 5, "user": "Pseudo"}
 POST /api/event   {"type": "bits", "amount": 500, "user": "Pseudo"}
 POST /api/event   {"type": "tip", "amount": 10, "user": "Pseudo"}
+POST /api/event   {"action": "pause"}      (ou "resume")
 ```
+
+---
+
+## Mettre à jour le timer
+
+Remplacez `server.js`, `lib/` et `public/` dans `timer/` (Files de Sparked Host), puis redémarrez le bot. Ne touchez pas au dossier `timer/data/` : il contient vos réglages, votre clé et le timer en cours.
 
 ---
 

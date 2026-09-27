@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lunaria Timer</title>
 <link rel="stylesheet" href="fonts.css">
+<script src="sound.js"></script>
 <style>
   :root {
     --accent: #b36bff;
@@ -12,6 +13,14 @@
     --accent-light: #d9b5ff;
     --scale: 1;
     --fit: 1;
+    --z-clock: 1;
+    --z-title: 1;
+    --z-text: 1;
+    --z-rules: 1;
+    --z-popup: 1;
+    --z-end: 1;
+    --px: 0;
+    --py: 0;
     --text: #fff8ff;
   }
   html, body {
@@ -31,13 +40,24 @@
   body.preview-bg {
     background: radial-gradient(ellipse at 50% 60%, #3a0f6e 0%, #1a0536 45%, #0b0114 100%);
   }
+  canvas.layer {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  #ambient { z-index: 0; }
+  #fx { z-index: 3; }
 
   .stage {
     position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     font-size: calc(100px * var(--scale) * var(--fit));
+    transform: translate(calc(var(--px) * 1vw), calc(var(--py) * 1vh));
     opacity: 0;
     transition: opacity .8s ease;
   }
@@ -50,16 +70,22 @@
       0 0 .3em var(--accent),
       0 0 .7em rgba(var(--accent-rgb), .55);
   }
+  .fx-pulse .breathe { animation: breathe 4s ease-in-out infinite; }
+  @keyframes breathe {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.28) saturate(1.15); }
+  }
 
   /* Titre du -athon */
   .title {
     display: none;
     align-items: center;
     gap: .22em;
-    font-size: .46em;
+    font-size: calc(.46em * var(--z-title));
     font-weight: 600;
     letter-spacing: .12em;
     margin-bottom: -.05em;
+    transition: opacity .35s ease;
   }
   .mode-athon .title.on { display: flex; }
   .title svg { width: .9em; height: .9em; flex: none; filter: drop-shadow(0 0 .12em var(--accent)); }
@@ -67,12 +93,12 @@
   .script {
     font-family: "Lunaria Script", "Allura", cursive;
     font-weight: 400;
-    font-size: .56em;
+    font-size: calc(.56em * var(--z-text));
     line-height: 1.1;
     white-space: nowrap;
     letter-spacing: .01em;
   }
-  .top { margin-bottom: -.06em; }
+  .top { margin-bottom: -.06em; transition: opacity .35s ease; }
   .top:empty, .bottom:empty { display: none; }
   .mode-athon .top { display: none; }
 
@@ -82,6 +108,7 @@
     display: flex;
     align-items: center;
     gap: .32em;
+    font-size: var(--z-clock);
   }
   .clock-wrap::before {
     /* voile sombre très doux pour rester lisible sur les nuages clairs */
@@ -98,7 +125,8 @@
     font-size: 1.5em;
     font-weight: 600;
     line-height: 1.12;
-    transition: opacity .4s, filter .4s;
+    perspective: 3em;
+    transition: opacity .4s, color .4s;
   }
   .clock .d {
     display: inline-block;
@@ -111,12 +139,29 @@
     text-align: center;
     transform: translateY(-.06em);
   }
-  .clock .d.tick { animation: tick .45s ease-out; }
-  @keyframes tick {
+  .anim-fade .clock .d.tick { animation: tickFade .45s ease-out; }
+  .anim-slide .clock .d.tick { animation: tickSlide .4s cubic-bezier(.2, .8, .3, 1); }
+  .anim-flip .clock .d.tick { animation: tickFlip .5s ease-out; }
+  @keyframes tickFade {
     from { opacity: .35; transform: translateY(-.08em); filter: blur(1px); }
     to { opacity: 1; transform: none; filter: none; }
   }
-  .paused .clock { opacity: .55; filter: saturate(.6); }
+  @keyframes tickSlide {
+    from { opacity: 0; transform: translateY(-.45em); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes tickFlip {
+    from { opacity: .2; transform: rotateX(90deg); }
+    to { opacity: 1; transform: none; }
+  }
+  .paused .clock { opacity: .55; }
+
+  .urgent .clock { color: #ffe0f5; }
+  .clock.beat { animation: beat .7s ease-out; }
+  @keyframes beat {
+    0% { transform: scale(1.1); filter: brightness(1.6); }
+    100% { transform: scale(1); filter: none; }
+  }
 
   .sparkle {
     width: .34em;
@@ -127,25 +172,27 @@
     animation: twinkle 3.2s ease-in-out infinite;
   }
   .sparkle.r { animation-delay: -1.6s; }
+  .no-sparkles .sparkle { display: none; }
   @keyframes twinkle {
     0%, 100% { opacity: .95; transform: scale(1) rotate(0deg); }
     50% { opacity: .35; transform: scale(.7) rotate(45deg); }
   }
 
   .state-label {
-    font-size: .42em;
     height: 0;
     overflow: visible;
     opacity: 0;
     transition: opacity .4s;
     margin-top: -.1em;
+    font-size: calc(.42em * var(--z-text));
   }
   .paused .state-label { opacity: 1; }
+  .paused .bottom { visibility: hidden; }
 
   .rules {
     display: none;
     margin-top: .12em;
-    font-size: .2em;
+    font-size: calc(.2em * var(--z-rules));
     font-weight: 600;
     letter-spacing: .14em;
     white-space: nowrap;
@@ -166,7 +213,7 @@
   .stats {
     display: none;
     margin-top: .25em;
-    font-size: .18em;
+    font-size: calc(.18em * var(--z-rules));
     letter-spacing: .12em;
     opacity: .85;
   }
@@ -178,14 +225,14 @@
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%) scale(.9);
-    font-size: .95em;
+    font-size: calc(.95em * var(--z-end));
     opacity: 0;
     pointer-events: none;
     transition: opacity 1.2s ease, transform 1.2s ease;
   }
   .ended .end-text { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   .ended .clock-wrap, .ended .top, .ended .bottom, .ended .rules, .ended .stats { opacity: 0; transition: opacity 1s; }
-  .mode-athon.ended .end-text { top: auto; bottom: -.45em; transform: translate(-50%, 0); font-size: .6em; }
+  .mode-athon.ended .end-text { top: auto; bottom: -.45em; transform: translate(-50%, 0); font-size: calc(.6em * var(--z-end)); }
   .mode-athon.ended .clock-wrap { opacity: .5; }
 
   /* Temps ajouté : remplace le titre le temps d'une animation */
@@ -196,6 +243,7 @@
     width: 0;
     height: 0;
     pointer-events: none;
+    font-size: var(--z-popup);
   }
   .popup {
     position: absolute;
@@ -218,7 +266,6 @@
     80% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -.3em); }
   }
-  .title, .top { transition: opacity .35s ease; }
   .popping .title, .popping .top { opacity: 0; }
   .flash .clock { animation: flash .9s ease-out; }
   @keyframes flash {
@@ -228,25 +275,27 @@
 </style>
 </head>
 <body>
+<canvas class="layer" id="ambient"></canvas>
 <div class="stage" id="stage">
   <div class="popups" id="popups"></div>
-  <div class="title glow" id="title">
+  <div class="title glow breathe" id="title">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.5 2.2a9.8 9.8 0 1 0 7.3 13.9 8.2 8.2 0 0 1-7.3-13.9z"/></svg>
     <span id="titleText">Lunariathon</span>
     <svg viewBox="0 0 24 24" aria-hidden="true" style="transform:scaleX(-1)"><path fill="currentColor" d="M14.5 2.2a9.8 9.8 0 1 0 7.3 13.9 8.2 8.2 0 0 1-7.3-13.9z"/></svg>
   </div>
-  <div class="script top glow" id="top"></div>
-  <div class="clock-wrap">
+  <div class="script top glow breathe" id="top"></div>
+  <div class="clock-wrap breathe" id="clockWrap">
     <svg class="sparkle" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0c.6 6.4 5.6 11.4 12 12-6.4.6-11.4 5.6-12 12-.6-6.4-5.6-11.4-12-12C6.4 11.4 11.4 6.4 12 0z"/></svg>
     <div class="clock glow" id="clock"></div>
     <svg class="sparkle r" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0c.6 6.4 5.6 11.4 12 12-6.4.6-11.4 5.6-12 12-.6-6.4-5.6-11.4-12-12C6.4 11.4 11.4 6.4 12 0z"/></svg>
   </div>
-  <div class="script state-label glow">en pause</div>
+  <div class="script state-label glow" id="pauseText">en pause</div>
   <div class="script bottom glow" id="bottom"></div>
   <div class="rules glow" id="rules"></div>
   <div class="stats glow" id="stats"></div>
   <div class="script end-text glow" id="endText"></div>
 </div>
+<canvas class="layer" id="fx"></canvas>
 
 <script>
 (() => {
@@ -261,7 +310,243 @@
   let view = null;      // état affiché
   let clockOffset = 0;  // décalage entre l'horloge du serveur et celle d'OBS
   let lastText = '';
+  let fx = {};
+  let sound = { volume: 60 };
 
+  const Sound = window.LunariaSound;
+
+  // =====================================================================
+  //  Effets (particules)
+  // =====================================================================
+  const FX = (() => {
+    const fxCanvas = $('fx');
+    const ambCanvas = $('ambient');
+    const fctx = fxCanvas.getContext('2d');
+    const actx = ambCanvas.getContext('2d');
+    let W = 0, H = 0, dpr = 1;
+    let parts = [];
+    let rings = [];
+    let dust = [];
+    let dustOn = false;
+    let running = false;
+
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = window.innerWidth;
+      H = window.innerHeight;
+      for (const c of [fxCanvas, ambCanvas]) {
+        c.width = Math.round(W * dpr);
+        c.height = Math.round(H * dpr);
+      }
+      fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      actx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#b36bff';
+    const rand = (a, b) => a + Math.random() * (b - a);
+
+    function star(ctx, x, y, r, color, alpha, rot = 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = r * 3;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(0, -r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.quadraticCurveTo(0, 0, 0, r);
+      ctx.quadraticCurveTo(0, 0, -r, 0);
+      ctx.quadraticCurveTo(0, 0, 0, -r);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function center() {
+      const r = $('clock').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+    }
+
+    const effects = {
+      stars() { // pluie d'étoiles
+        for (let i = 0; i < 90; i++) {
+          parts.push({ kind: 'star', x: rand(0, W), y: rand(-H * 0.6, 0), vx: rand(-15, 15), vy: rand(H * 0.12, H * 0.35), r: rand(4, 13), life: 0, max: rand(3.5, 6), spin: rand(-1, 1), tw: rand(0, 6) });
+        }
+      },
+      shooting() { // étoiles filantes
+        for (let i = 0; i < 14; i++) {
+          const fromLeft = Math.random() < 0.5;
+          const speed = rand(W * 0.7, W * 1.1);
+          const ang = rand(0.25, 0.5);
+          parts.push({
+            kind: 'shoot', delay: i * 0.28 + rand(0, 0.2),
+            x: fromLeft ? rand(-W * 0.2, W * 0.4) : rand(W * 0.6, W * 1.2), y: rand(-H * 0.2, H * 0.3),
+            vx: (fromLeft ? 1 : -1) * speed * Math.cos(ang), vy: speed * Math.sin(ang), life: 0, max: 1.5, len: rand(W * 0.12, W * 0.28),
+          });
+        }
+      },
+      burst() { // gerbe d'étincelles
+        const c = center();
+        const reach = Math.max(W, H);
+        for (let i = 0; i < 220; i++) {
+          const a = rand(0, Math.PI * 2);
+          const v = rand(reach * 0.1, reach * 0.45);
+          parts.push({ kind: 'spark', x: c.x, y: c.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, g: reach * 0.12, r: rand(2, 5), life: 0, max: rand(1.6, 2.8) });
+        }
+        for (let i = 0; i < 24; i++) {
+          const a = rand(0, Math.PI * 2);
+          const v = rand(reach * 0.06, reach * 0.2);
+          parts.push({ kind: 'star', x: c.x, y: c.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: rand(7, 14), life: 0, max: 2.6, spin: rand(-2, 2), tw: 0 });
+        }
+      },
+      moon() { // halo lunaire
+        const c = center();
+        rings.push({ x: c.x, y: c.y, life: 0, max: 2.4, r0: c.h * 0.4, r1: Math.max(W, H) * 0.7 });
+        rings.push({ x: c.x, y: c.y, life: -0.35, max: 2.4, r0: c.h * 0.3, r1: Math.max(W, H) * 0.5 });
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * Math.PI * 2;
+          parts.push({ kind: 'star', x: c.x + Math.cos(a) * c.w * 0.4, y: c.y + Math.sin(a) * c.h * 0.6, vx: Math.cos(a) * 160, vy: Math.sin(a) * 160, r: rand(5, 11), life: 0, max: 2.4, spin: 1, tw: 0 });
+        }
+      },
+      sparkles() { // petites étincelles quand du temps est ajouté
+        const c = center();
+        for (let i = 0; i < 40; i++) {
+          parts.push({ kind: 'star', x: c.x + rand(-c.w / 2, c.w / 2), y: c.y + rand(-c.h / 2, c.h / 2), vx: rand(-50, 50), vy: rand(-120, -30), r: rand(3, 7), life: 0, max: rand(0.9, 1.6), spin: rand(-2, 2), tw: 0 });
+        }
+      },
+    };
+
+    function play(name) {
+      if (!effects[name]) return;
+      effects[name]();
+      loop();
+    }
+
+    function setDust(on) {
+      dustOn = on;
+      if (on && !dust.length) {
+        for (let i = 0; i < 45; i++) dust.push({ x: rand(0, W), y: rand(0, H), r: rand(0.6, 1.8), vy: rand(-12, -4), vx: rand(-4, 4), tw: rand(0, 6) });
+      }
+      if (!on) actx.clearRect(0, 0, W, H);
+      loop();
+    }
+
+    let last = 0;
+    function loop() {
+      if (running) return;
+      running = true;
+      last = performance.now();
+      requestAnimationFrame(frame);
+    }
+
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const col = accent();
+
+      // Poussière d'étoiles (arrière-plan)
+      if (dustOn) {
+        actx.clearRect(0, 0, W, H);
+        for (const p of dust) {
+          p.y += p.vy * dt;
+          p.x += p.vx * dt;
+          p.tw += dt * 2;
+          if (p.y < -5) { p.y = H + 5; p.x = rand(0, W); }
+          actx.globalAlpha = 0.35 + 0.35 * Math.sin(p.tw);
+          actx.fillStyle = '#fff';
+          actx.shadowColor = col;
+          actx.shadowBlur = 6;
+          actx.beginPath();
+          actx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          actx.fill();
+        }
+        actx.globalAlpha = 1;
+      }
+
+      // Effets ponctuels (premier plan)
+      fctx.clearRect(0, 0, W, H);
+      for (const r of rings) {
+        r.life += dt;
+        if (r.life < 0) continue;
+        const k = r.life / r.max;
+        const rad = r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 3));
+        fctx.save();
+        fctx.globalAlpha = Math.max(0, 1 - k);
+        fctx.strokeStyle = '#fff';
+        fctx.lineWidth = 3 * (1 - k) + 1;
+        fctx.shadowColor = col;
+        fctx.shadowBlur = 30;
+        fctx.beginPath();
+        fctx.arc(r.x, r.y, rad, 0, Math.PI * 2);
+        fctx.stroke();
+        const g = fctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, rad);
+        g.addColorStop(0, `rgba(255,255,255,${0.25 * (1 - k)})`);
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        fctx.fillStyle = g;
+        fctx.fill();
+        fctx.restore();
+      }
+      rings = rings.filter((r) => r.life < r.max);
+
+      for (const p of parts) {
+        if (p.delay > 0) { p.delay -= dt; continue; }
+        p.life += dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.g) p.vy += p.g * dt;
+        const k = p.life / p.max;
+        if (p.kind === 'star') {
+          p.tw += dt * 5;
+          const a = (1 - k) * (0.6 + 0.4 * Math.sin(p.tw));
+          star(fctx, p.x, p.y, p.r, col, a, p.life * p.spin);
+        } else if (p.kind === 'spark') {
+          fctx.globalAlpha = Math.max(0, 1 - k);
+          fctx.fillStyle = k < 0.3 ? '#fff' : col;
+          fctx.shadowColor = col;
+          fctx.shadowBlur = 8;
+          fctx.beginPath();
+          fctx.arc(p.x, p.y, p.r * (1 - k * 0.5), 0, Math.PI * 2);
+          fctx.fill();
+          fctx.globalAlpha = 1;
+        } else if (p.kind === 'shoot') {
+          const sp = Math.hypot(p.vx, p.vy);
+          const tx = p.x - (p.vx / sp) * p.len;
+          const ty = p.y - (p.vy / sp) * p.len;
+          const grad = fctx.createLinearGradient(tx, ty, p.x, p.y);
+          grad.addColorStop(0, 'rgba(255,255,255,0)');
+          grad.addColorStop(1, `rgba(255,255,255,${Math.max(0, 1 - k)})`);
+          fctx.save();
+          fctx.strokeStyle = grad;
+          fctx.lineWidth = 3.5;
+          fctx.lineCap = 'round';
+          fctx.shadowColor = col;
+          fctx.shadowBlur = 12;
+          fctx.beginPath();
+          fctx.moveTo(tx, ty);
+          fctx.lineTo(p.x, p.y);
+          fctx.stroke();
+          fctx.restore();
+          star(fctx, p.x, p.y, 8, col, 1 - k);
+        }
+      }
+      parts = parts.filter((p) => p.delay > 0 || p.life < p.max);
+
+      if (parts.length || rings.length || dustOn) requestAnimationFrame(frame);
+      else {
+        fctx.clearRect(0, 0, W, H);
+        running = false;
+      }
+    }
+
+    return { play, setDust };
+  })();
+
+  // =====================================================================
+  //  Affichage
+  // =====================================================================
   function applyDisplay(d) {
     const root = document.documentElement.style;
     if (d.accent && /^#[0-9a-f]{6}$/i.test(d.accent)) {
@@ -272,9 +557,25 @@
       root.setProperty('--accent-light', `rgb(${rgb.map((c) => Math.round(c + (255 - c) * 0.45)).join(', ')})`);
     }
     if (d.scale) root.setProperty('--scale', d.scale);
+    const sizes = d.sizes || {};
+    for (const k of ['clock', 'title', 'text', 'rules', 'popup', 'end']) {
+      root.setProperty('--z-' + k, (Number(sizes[k]) || 100) / 100);
+    }
+    const pos = d.position || {};
+    root.setProperty('--px', Number(pos.x) || 0);
+    root.setProperty('--py', Number(pos.y) || 0);
     $('title').classList.toggle('on', d.showTitle !== false);
     $('rules').classList.toggle('on', d.showRules !== false);
     $('stats').classList.toggle('on', !!d.showStats);
+    $('pauseText').textContent = d.pauseText || 'en pause';
+
+    fx = d.fx || {};
+    sound = d.sound || { volume: 60 };
+    stage.classList.remove('anim-none', 'anim-fade', 'anim-slide', 'anim-flip');
+    stage.classList.add('anim-' + (fx.digitAnim || 'fade'));
+    stage.classList.toggle('fx-pulse', !!fx.pulse);
+    stage.classList.toggle('no-sparkles', fx.sparkles === false);
+    FX.setDust(!!fx.stars);
   }
 
   function remainingMs() {
@@ -294,7 +595,7 @@
   }
 
   function renderClock(text) {
-    if (text === lastText) return;
+    if (text === lastText) return false;
     const clock = $('clock');
     if (clock.children.length !== text.length) {
       clock.innerHTML = '';
@@ -316,19 +617,42 @@
       });
     }
     lastText = text;
+    return true;
   }
 
+  let endedShown = null; // évite de rejouer l'effet de fin
   function render() {
     if (!view) return;
     const athon = view.mode === 'athon';
     const ms = remainingMs();
-    const ended = view.status === 'ended' || (view.status === 'running' && ms <= 0);
+    const running = view.status === 'running';
+    const ended = view.status === 'ended' || (running && ms <= 0);
     stage.classList.toggle('mode-athon', athon);
     stage.classList.toggle('paused', view.status === 'paused');
     stage.classList.toggle('ended', ended);
+    const urgent = fx.urgency !== false && running && ms > 0 && ms <= 10000;
+    stage.classList.toggle('urgent', urgent);
     const before = lastText.length;
-    renderClock(format(ms, athon));
+    const changed = renderClock(format(ms, athon));
+    if (changed && urgent) {
+      const clock = $('clock');
+      clock.classList.remove('beat');
+      void clock.offsetWidth;
+      clock.classList.add('beat');
+    }
     if (lastText.length !== before) fit();
+
+    // En hors ligne, la fin est détectée ici (en ligne, le serveur envoie « ended »).
+    if (offline && ended && running && endedShown !== view.endAt) {
+      endedShown = view.endAt;
+      celebrateEnd(view.mode);
+    }
+  }
+
+  function celebrateEnd(mode) {
+    const athon = mode === 'athon';
+    FX.play(athon ? fx.endAthon : fx.endCountdown);
+    Sound.play(athon ? sound.endAthon : sound.endCountdown, sound.volume, 'end');
   }
 
   // Réduit l'affichage si la source OBS est plus petite que le contenu.
@@ -346,6 +670,7 @@
   function setTexts() {
     if (!view) return;
     const athon = view.mode === 'athon';
+    const L = view.labels || {};
     $('top').textContent = view.countdown.top || '';
     $('bottom').textContent = athon ? (view.athon.subtitle || '') : (view.countdown.bottom || '');
     $('endText').textContent = athon ? view.athon.endText : view.countdown.endText;
@@ -364,12 +689,12 @@
     if (view.athon.multiplier > 1) {
       const b = document.createElement('span');
       b.className = 'boost';
-      b.textContent = `Pleine lune ×${view.athon.multiplier}`;
+      b.textContent = `Pleine lune ×${String(view.athon.multiplier).replace('.', ',')}`;
       rules.appendChild(b);
     }
     const st = view.stats || {};
     const subs = (st.t1 || 0) + (st.t2 || 0) + (st.t3 || 0) + (st.prime || 0) + (st.gifts || 0);
-    $('stats').textContent = `${subs} subs ✦ ${st.bits || 0} bits ✦ ${String(st.tips || 0).replace('.', ',')} de dons`;
+    $('stats').textContent = `${subs} ${L.subs || 'subs'} ✦ ${st.bits || 0} ${L.bits || 'bits'} ✦ ${String(st.tips || 0).replace('.', ',')} ${L.tips || 'de dons'}`;
   }
 
   function fmtAdded(ms) {
@@ -393,8 +718,8 @@
       stage.classList.remove('popping');
       return;
     }
-    stage.classList.add('popping');
     popupBusy = true;
+    stage.classList.add('popping');
     const el = document.createElement('div');
     el.className = 'popup glow' + (p.ms < 0 ? ' minus' : '');
     const plus = document.createElement('div');
@@ -405,13 +730,22 @@
     who.textContent = p.user && p.label ? `${p.user} · ${p.label}` : (p.user || p.label || '');
     el.append(plus, who);
     $('popups').appendChild(el);
-    stage.classList.remove('flash');
-    void stage.offsetWidth;
-    stage.classList.add('flash');
     // Plusieurs événements d'affilée : on accélère pour ne pas prendre de retard.
     const speed = queue.length > 3 ? 0.45 : 1;
     el.style.animationDuration = `${3.4 * speed}s`;
     setTimeout(() => { el.remove(); nextPopup(); }, 3400 * speed);
+  }
+
+  function timeAdded(p) {
+    if (p.ms > 0) {
+      Sound.play(sound.add, sound.volume);
+      if (fx.add === 'flash' || fx.add === undefined) {
+        stage.classList.remove('flash');
+        void stage.offsetWidth;
+        stage.classList.add('flash');
+      } else if (fx.add === 'sparkles') FX.play('sparkles');
+    }
+    if (!view || !view.display || view.display.showPopups !== false) popup(p);
   }
 
   function update(next) {
@@ -424,24 +758,31 @@
     stage.classList.add('ready');
   }
 
-  // ---------- Mode hors ligne (Starting Soon sans serveur) ----------
+  // =====================================================================
+  //  Mode hors ligne (Starting Soon sans serveur)
+  // =====================================================================
   function startOffline() {
+    const flag = (k, def) => (params.has(k) ? params.get(k) !== '0' : def);
     const minutes = Number(params.get('min') ?? 5);
     const at = params.get('at'); // « 20:30 »
-    let endAt = Date.now() + Math.max(0, minutes) * 60000;
-    if (at && /^\d{1,2}[:h]\d{2}$/.test(at)) {
-      const [h, m] = at.split(/[:h]/).map(Number);
-      const d = new Date();
-      d.setHours(h, m, 0, 0);
-      if (d.getTime() < Date.now() - 6 * 3600 * 1000) d.setDate(d.getDate() + 1);
-      endAt = d.getTime();
-    }
+    const computeEnd = () => {
+      let endAt = Date.now() + Math.max(0, minutes) * 60000;
+      if (at && /^\d{1,2}[:h]\d{2}$/.test(at)) {
+        const [h, m] = at.split(/[:h]/).map(Number);
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        if (d.getTime() < Date.now() - 6 * 3600 * 1000) d.setDate(d.getDate() + 1);
+        endAt = d.getTime();
+      }
+      return endAt;
+    };
     const scale = Number(params.get('scale'));
     const accent = params.get('accent');
-    update({
+    const pct = (k) => (Number(params.get(k)) > 0 ? Number(params.get(k)) : 100);
+    const state = {
       mode: 'countdown',
       status: 'running',
-      endAt,
+      endAt: computeEnd(),
       remainingMs: 0,
       countdown: {
         top: params.get('top') ?? 'le stream commence dans',
@@ -452,23 +793,71 @@
       display: {
         accent: /^#?[0-9a-f]{6}$/i.test(accent || '') ? '#' + accent.replace('#', '') : undefined,
         scale: scale > 0 ? scale : undefined,
+        sizes: { clock: pct('zc'), text: pct('zt'), end: pct('ze') },
+        position: { x: Number(params.get('px')) || 0, y: Number(params.get('py')) || 0 },
+        fx: {
+          digitAnim: params.get('anim') || 'fade',
+          pulse: flag('pulse', false),
+          sparkles: flag('sparkles', true),
+          stars: flag('stars', false),
+          urgency: flag('urgency', true),
+          endCountdown: params.get('endfx') || 'stars',
+        },
+        sound: { volume: Number(params.get('vol') ?? 60), endCountdown: params.get('endsound') || 'none' },
       },
+    };
+    update(state);
+    // Scène réaffichée dans OBS : le compte à rebours (en durée) repart du début.
+    onSceneShown(() => {
+      if (!at) {
+        state.endAt = computeEnd();
+        endedShown = null;
+        update(state);
+      }
     });
   }
 
-  // ---------- Mode connecté (serveur Lunaria) ----------
+  // =====================================================================
+  //  Mode connecté (serveur Lunaria)
+  // =====================================================================
   function startOnline() {
     const es = new EventSource('api/stream');
     es.addEventListener('state', (e) => update(JSON.parse(e.data)));
-    es.addEventListener('added', (e) => {
-      if (!view || !view.display || view.display.showPopups !== false) popup(JSON.parse(e.data));
+    es.addEventListener('added', (e) => timeAdded(JSON.parse(e.data)));
+    es.addEventListener('ended', (e) => celebrateEnd(JSON.parse(e.data).mode));
+    onSceneShown(() => {
+      if (view && view.mode === 'countdown' && view.countdown.autoStart) {
+        fetch('api/obs/shown', { method: 'POST' }).catch(() => {});
+      }
     });
   }
+
+  // Détecte l'affichage de la scène dans OBS (source « active » = visible en direct).
+  function onSceneShown(cb) {
+    let wasActive = null;
+    const handle = (active) => {
+      if (active && wasActive === false) cb();
+      wasActive = !!active;
+    };
+    window.addEventListener('obsSourceActiveChanged', (e) => handle(e.detail && e.detail.active));
+    if (window.obsstudio) window.obsstudio.onActiveChange = handle;
+    // Au chargement, OBS n'envoie rien : on considère la source inactive, sauf si la page
+    // vient d'être (re)chargée par l'option « Actualiser quand la scène devient active ».
+    wasActive = false;
+    if (window.obsstudio && document.visibilityState === 'visible' && params.get('autostart') !== '0') {
+      setTimeout(() => { if (wasActive === false) handle(true); }, 600);
+    }
+  }
+
+  // Aperçu depuis le panneau (même origine) : tester un effet sans toucher au timer.
+  window.lunariaPreview = {
+    fx: (name) => FX.play(name),
+    added: (p) => timeAdded(p),
+  };
 
   if (params.has('bg')) document.body.classList.add('preview-bg');
   document.fonts.ready.then(() => (offline ? startOffline() : startOnline()));
   setInterval(render, 200);
-
 })();
 </script>
 </body>

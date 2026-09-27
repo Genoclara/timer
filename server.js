@@ -17,6 +17,7 @@ const { StreamElements } = require('./lib/streamelements');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
+const SOUNDS_DIR = path.join(PUBLIC_DIR, 'sounds');
 const DATA_DIR = process.env.LUNARIA_DATA_DIR || path.join(ROOT, 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
@@ -45,6 +46,7 @@ const STATIC = {
   '/panel': ['panel.html', 'text/html; charset=utf-8'],
   '/panel.html': ['panel.html', 'text/html; charset=utf-8'],
   '/fonts.css': ['fonts.css', 'text/css; charset=utf-8'],
+  '/sound.js': ['sound.js', 'text/javascript; charset=utf-8'],
 };
 
 function start(options = {}) {
@@ -90,7 +92,8 @@ function start(options = {}) {
     onChange: (reason, popup) => {
       broadcast('state', timer.publicState());
       broadcast('log', state.log.slice(0, 50), true);
-      if (popup && config.display.showPopups) broadcast('added', popup);
+      if (popup) broadcast('added', popup);
+      if (reason === 'ended') broadcast('ended', { mode: state.mode });
       scheduleSave();
     },
   });
@@ -109,6 +112,7 @@ function start(options = {}) {
     log,
   });
 
+  let lastShown = 0;
   const tick = setInterval(() => timer.tick(), 250);
   const heartbeat = setInterval(() => broadcast('state', timer.publicState()), 15000);
 
@@ -159,6 +163,7 @@ function start(options = {}) {
     switch (a) {
       case 'start': timer.start(); break;
       case 'pause': timer.pause(); break;
+      case 'resume': timer.resume(); break;
       case 'reset': timer.reset(body.minutes); break;
       case 'set': timer.setRemaining(body.seconds); break;
       case 'add': timer.manual(body.seconds, typeof body.note === 'string' ? body.note.slice(0, 40) : ''); break;
@@ -235,6 +240,26 @@ function start(options = {}) {
       }
       if (req.method === 'GET' && p === '/api/state') return json(res, 200, timer.publicState());
 
+      // Sons personnalisés : fichiers déposés dans public/sounds/
+      if (req.method === 'GET' && p.startsWith('/sounds/')) {
+        const name = decodeURIComponent(p.slice(8));
+        const ext = (/\.(mp3|ogg|wav|m4a)$/i.exec(name) || [])[1];
+        if (!ext || !/^[\w .()-]{1,80}$/.test(name)) return json(res, 404, { error: 'Introuvable' });
+        const file = path.join(SOUNDS_DIR, name);
+        if (!fs.existsSync(file)) return json(res, 404, { error: 'Introuvable' });
+        const types = { mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4' };
+        res.writeHead(200, { 'Content-Type': types[ext.toLowerCase()], 'Cache-Control': 'public, max-age=3600' });
+        return fs.createReadStream(file).pipe(res);
+      }
+
+      // La page OBS signale que sa scène vient de s'afficher (démarrage automatique du Starting Soon).
+      if (req.method === 'POST' && p === '/api/obs/shown') {
+        const now = Date.now();
+        if (now - lastShown < 2000) return json(res, 200, { started: false });
+        lastShown = now;
+        return json(res, 200, { started: timer.sceneShown() });
+      }
+
       if (req.method === 'GET' && p === '/api/stream') {
         const key = url.searchParams.get('key');
         const admin = key ? checkKey(req, key) : false;
@@ -268,6 +293,12 @@ function start(options = {}) {
 
         if (req.method === 'GET' && p === '/api/admin/config') return json(res, 200, adminView());
 
+        if (req.method === 'GET' && p === '/api/admin/sounds') {
+          let files = [];
+          try { files = fs.readdirSync(SOUNDS_DIR).filter((f) => /^[\w .()-]{1,80}\.(mp3|ogg|wav|m4a)$/i.test(f)); } catch (_) { /* pas de dossier */ }
+          return json(res, 200, { files });
+        }
+
         if (req.method === 'POST' && p === '/api/admin/config') {
           const body = await readBody(req);
           const before = JSON.stringify(config.streamelements);
@@ -292,6 +323,10 @@ function start(options = {}) {
         if (req.method === 'POST' && p === '/api/event') {
           const body = await readBody(req);
           let added;
+          if (['pause', 'resume', 'start'].includes(body.action)) {
+            timer[body.action]();
+            return json(res, 200, { ok: true, status: state.status, remainingSeconds: Math.round(timer.remainingMs() / 1000) });
+          }
           if (body.seconds != null) added = timer.manual(body.seconds, typeof body.note === 'string' ? body.note.slice(0, 40) : 'Bot');
           else added = timer.handleEvent(normalizeIncoming(body));
           return json(res, 200, { ok: true, addedSeconds: Math.round((added || 0) / 1000), remainingSeconds: Math.round(timer.remainingMs() / 1000) });
@@ -365,6 +400,9 @@ function start(options = {}) {
     handle,
     timer,
     stop,
+    /** Met le timer en pause / le relance. */
+    pause: () => timer.pause(),
+    resume: () => timer.resume(),
     /** Ajoute (ou retire) du temps en secondes. */
     addTime: (seconds, note) => timer.manual(seconds, note),
     /** Envoie un événement : { type: 'sub'|'gift'|'bits'|'tip', tier, count, amount, user } */

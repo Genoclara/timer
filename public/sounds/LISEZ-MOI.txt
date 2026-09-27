@@ -1,0 +1,3 @@
+Déposez ici vos propres sons (.mp3, .ogg, .wav ou .m4a).
+Ils apparaîtront dans le panneau, section « Sons », après avoir cliqué sur « Actualiser la liste ».
+Noms de fichiers : lettres, chiffres, espaces, tirets et points uniquement (pas d'accents).

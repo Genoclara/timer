@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lunaria Timer</title>
 <link rel="stylesheet" href="fonts.css">
+<script src="sound.js"></script>
 <style>
   :root {
     --bg: #0c0317;
@@ -177,6 +178,7 @@
   .check input { width: 17px; height: 17px; accent-color: var(--accent); }
   .inline { display: flex; align-items: center; gap: 6px; }
   .inline input { width: 90px; }
+  .inline select { flex: 1; min-width: 0; }
   .unit { color: var(--muted); font-size: 13px; white-space: nowrap; }
 
   .log { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow: auto; font-size: 13.5px; }
@@ -257,7 +259,7 @@
         <li>Dans OBS, sur votre scène Starting Soon : <b>+ → Navigateur</b>.</li>
         <li><b>Décochez « Fichier local »</b> et collez l'adresse dans le champ <b>URL</b>.</li>
         <li>Largeur <b>1200</b>, hauteur <b>330</b>. Placez la source sous « follow for more ».</li>
-        <li>Cochez <b>« Actualiser le navigateur quand la scène devient active »</b> : le compte à rebours repart à chaque fois que vous affichez la scène.</li>
+        <li>Cochez <b>« Contrôler l'audio via OBS »</b> si vous avez choisi un son. Le compte à rebours repart tout seul à chaque fois que la scène passe à l'antenne.</li>
       </ol>
       <p class="help">Tout fonctionne sans Internet ni serveur. Si vous déplacez le dossier du timer, recopiez l'adresse.</p>
     </section>
@@ -284,7 +286,28 @@
       <div class="grid2">
         <label><span>Couleur de la lueur</span><input type="color" id="offAccent" value="#b36bff"></label>
         <label><span>Taille <b id="offScaleVal">100 %</b></span><input type="range" id="offScale" min="0.5" max="1.6" step="0.05" value="1"></label>
+        <label><span>Taille du timer <b data-pct="offZc"></b></span><input type="range" id="offZc" min="50" max="200" step="5" value="100"></label>
+        <label><span>Taille des textes <b data-pct="offZt"></b></span><input type="range" id="offZt" min="50" max="200" step="5" value="100"></label>
+        <label><span>Position gauche ↔ droite <b data-pct="offPx"></b></span><input type="range" id="offPx" min="-50" max="50" step="1" value="0"></label>
+        <label><span>Position haut ↕ bas <b data-pct="offPy"></b></span><input type="range" id="offPy" min="-50" max="50" step="1" value="0"></label>
       </div>
+      <h3>Effets</h3>
+      <div class="grid2">
+        <label><span>Animation des chiffres</span><select id="offAnim"><option value="fade">Fondu</option><option value="slide">Glissé</option><option value="flip">Bascule</option><option value="none">Aucune</option></select></label>
+        <label><span>Effet de fin</span><select id="offEndFx"><option value="none">Aucun</option><option value="stars">Pluie d'étoiles</option><option value="shooting">Étoiles filantes</option><option value="burst">Gerbe d'étincelles</option><option value="moon">Halo lunaire</option></select></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="check"><input type="checkbox" id="offSparkles" checked> Étoiles autour du timer</label>
+        <label class="check"><input type="checkbox" id="offPulse"> Lueur qui respire</label>
+        <label class="check"><input type="checkbox" id="offStars"> Poussière d'étoiles</label>
+        <label class="check"><input type="checkbox" id="offUrgency" checked> 10 dernières secondes qui battent</label>
+      </div>
+      <h3>Son de fin</h3>
+      <div class="grid2">
+        <label><span>Son</span><div class="inline"><select id="offEndSound"><option value="none">Aucun</option><option value="bell">Cloches</option><option value="harp">Harpe</option><option value="gong">Gong</option><option value="fanfare">Fanfare douce</option><option value="clock">Horloge puis cloche</option></select><button type="button" class="small" id="offListen">▶</button></div></label>
+        <label><span>Volume <b data-pct="offVol"></b></span><input type="range" id="offVol" min="0" max="100" step="5" value="60"></label>
+      </div>
+      <p class="help">Pour entendre le son sur le stream, cochez « Contrôler l'audio via OBS » dans la source navigateur.</p>
     </section>
     <section>
       <h2>Et le Lunariathon ?</h2>
@@ -333,6 +356,7 @@
         <button type="button" data-mode="athon" data-kind="lunariathon">Lunariathon</button>
         <button type="button" data-mode="athon" data-kind="subathon">Subathon</button>
         <button type="button" data-mode="athon" data-kind="donathon">Donathon</button>
+        <button type="button" data-mode="athon" data-kind="custom" id="customKindBtn">Personnalisé</button>
       </div>
       <p class="help" id="modeHelp"></p>
 
@@ -344,6 +368,11 @@
           <label class="full"><span>Au-dessus du timer</span><input type="text" data-cfg="countdown.top"></label>
           <label class="full"><span>En dessous (facultatif)</span><input type="text" data-cfg="countdown.bottom"></label>
         </div>
+        <div class="row" style="margin-top:12px">
+          <label class="check"><input type="checkbox" data-cfg="countdown.autoStart"> Démarrer tout seul quand la scène s'affiche dans OBS</label>
+          <label class="check"><input type="checkbox" data-cfg="countdown.restartOnShow"> Repartir du début à chaque affichage</label>
+        </div>
+        <p class="help">Le compte à rebours se lance dès que la scène Starting Soon passe à l'antenne. Sans la 2e case, il n'est pas relancé s'il tourne déjà.</p>
       </div>
 
       <div id="athonSettings">
@@ -406,6 +435,69 @@
         <label class="check"><input type="checkbox" data-cfg="display.showPopups"> Animation « +5 min »</label>
         <label class="check"><input type="checkbox" data-cfg="display.showStats"> Compteur de subs, bits et dons</label>
       </div>
+      <h3>Tailles</h3>
+      <div class="grid3">
+        <label><span>Timer <b data-pct-cfg="display.sizes.clock"></b></span><input type="range" min="30" max="250" step="5" data-cfg="display.sizes.clock"></label>
+        <label><span>Titre <b data-pct-cfg="display.sizes.title"></b></span><input type="range" min="30" max="250" step="5" data-cfg="display.sizes.title"></label>
+        <label><span>Textes <b data-pct-cfg="display.sizes.text"></b></span><input type="range" min="30" max="250" step="5" data-cfg="display.sizes.text"></label>
+        <label><span>Règles et compteur <b data-pct-cfg="display.sizes.rules"></b></span><input type="range" min="30" max="250" step="5" data-cfg="display.sizes.rules"></label>
+        <label><span>« +5 min » <b data-pct-cfg="display.sizes.popup"></b></span><input type="range" min="30" max="250" step="5" data-cfg="display.sizes.popup"></label>
+        <label><span>Texte de fin <b data-pct-cfg="display.sizes.end"></b></span><input type="range" min="30" max="250" step="5" data-cfg="display.sizes.end"></label>
+      </div>
+      <h3>Position dans la source OBS</h3>
+      <div class="grid2">
+        <label><span>Gauche ↔ droite <b data-pct-cfg="display.position.x"></b></span><input type="range" min="-50" max="50" step="1" data-cfg="display.position.x"></label>
+        <label><span>Haut ↕ bas <b data-pct-cfg="display.position.y"></b></span><input type="range" min="-50" max="50" step="1" data-cfg="display.position.y"></label>
+      </div>
+      <p class="help">Utile si la source fait tout l'écran (1920 × 1080) : les effets de fin couvrent alors tout le stream, et vous placez le timer ici.</p>
+      <div class="grid2" style="margin-top:12px">
+        <label><span>Texte affiché pendant la pause</span><input type="text" data-cfg="display.pauseText"></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Sons et effets</h2>
+      <h3>Pendant le timer</h3>
+      <div class="grid2">
+        <label><span>Animation des chiffres</span><select data-cfg="display.fx.digitAnim"><option value="fade">Fondu</option><option value="slide">Glissé</option><option value="flip">Bascule</option><option value="none">Aucune</option></select></label>
+        <label><span>Quand du temps est ajouté</span><div class="inline"><select data-cfg="display.fx.add"><option value="flash">Éclat lumineux</option><option value="sparkles">Étincelles</option><option value="none">Aucun</option></select><button type="button" class="small" data-preview-fx="add">Voir</button></div></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="check"><input type="checkbox" data-cfg="display.fx.sparkles"> Étoiles autour du timer</label>
+        <label class="check"><input type="checkbox" data-cfg="display.fx.pulse"> Lueur qui respire</label>
+        <label class="check"><input type="checkbox" data-cfg="display.fx.stars"> Poussière d'étoiles</label>
+        <label class="check"><input type="checkbox" data-cfg="display.fx.urgency"> 10 dernières secondes qui battent</label>
+      </div>
+      <h3>Fin du timer</h3>
+      <div class="grid2">
+        <label><span>Effet — Starting Soon</span><div class="inline"><select data-cfg="display.fx.endCountdown"><option value="none">Aucun</option><option value="stars">Pluie d'étoiles</option><option value="shooting">Étoiles filantes</option><option value="burst">Gerbe d'étincelles</option><option value="moon">Halo lunaire</option></select><button type="button" class="small" data-preview-fx="display.fx.endCountdown">Voir</button></div></label>
+        <label><span>Effet — -athon</span><div class="inline"><select data-cfg="display.fx.endAthon"><option value="none">Aucun</option><option value="stars">Pluie d'étoiles</option><option value="shooting">Étoiles filantes</option><option value="burst">Gerbe d'étincelles</option><option value="moon">Halo lunaire</option></select><button type="button" class="small" data-preview-fx="display.fx.endAthon">Voir</button></div></label>
+      </div>
+      <h3>Sons</h3>
+      <div class="grid2">
+        <label><span>Quand du temps est ajouté</span><div class="inline"><select data-cfg="display.sound.add" data-sounds><option value="none">Aucun</option><option value="clock">Tic-tac d'horloge</option><option value="chime">Carillon</option><option value="crystal">Cristal</option><option value="magic">Poussière magique</option></select><button type="button" class="small" data-listen="display.sound.add">▶</button></div></label>
+        <label><span>Volume <b data-pct-cfg="display.sound.volume"></b></span><input type="range" min="0" max="100" step="5" data-cfg="display.sound.volume"></label>
+        <label><span>Fin du Starting Soon</span><div class="inline"><select data-cfg="display.sound.endCountdown" data-sounds><option value="none">Aucun</option><option value="bell">Cloches</option><option value="harp">Harpe</option><option value="gong">Gong</option><option value="fanfare">Fanfare douce</option><option value="clock">Horloge puis cloche</option></select><button type="button" class="small" data-listen="display.sound.endCountdown" data-end>▶</button></div></label>
+        <label><span>Fin d'un -athon</span><div class="inline"><select data-cfg="display.sound.endAthon" data-sounds><option value="none">Aucun</option><option value="bell">Cloches</option><option value="harp">Harpe</option><option value="gong">Gong</option><option value="fanfare">Fanfare douce</option><option value="clock">Horloge puis cloche</option></select><button type="button" class="small" data-listen="display.sound.endAthon" data-end>▶</button></div></label>
+      </div>
+      <p class="help">Vos propres sons : déposez des fichiers .mp3 dans <code>timer/public/sounds/</code> puis <button type="button" class="small" id="btnSounds">Actualiser la liste</button></p>
+      <p class="help">Pour entendre les sons sur le stream, cochez « Contrôler l'audio via OBS » dans la source navigateur.</p>
+    </section>
+
+    <section>
+      <h2>Noms affichés</h2>
+      <p class="help" style="margin-top:0">Renommez les subs, dons et bits selon votre lore (par exemple « Éclats de lune » à la place de « bits »).</p>
+      <div class="grid4" style="margin-top:12px">
+        <label><span>Sub</span><input type="text" data-cfg="labels.sub"></label>
+        <label><span>subs (pluriel)</span><input type="text" data-cfg="labels.subs"></label>
+        <label><span>sub offert</span><input type="text" data-cfg="labels.gift"></label>
+        <label><span>subs offerts</span><input type="text" data-cfg="labels.gifts"></label>
+        <label><span>Prime</span><input type="text" data-cfg="labels.prime"></label>
+        <label><span>Don</span><input type="text" data-cfg="labels.tip"></label>
+        <label><span>dons (pluriel)</span><input type="text" data-cfg="labels.tips"></label>
+        <label><span>bits</span><input type="text" data-cfg="labels.bits"></label>
+      </div>
+      <p class="help">Laissez un champ vide pour revenir au nom d'origine.</p>
     </section>
   </div>
 
@@ -423,7 +515,7 @@
     </section>
 
     <section>
-      <h2>Tester <small>ajoute vraiment du temps</small></h2>
+      <h2>Tester</h2>
       <div class="row">
         <button type="button" class="small" data-test='{"type":"sub","tier":"1"}'>Sub T1</button>
         <button type="button" class="small" data-test='{"type":"sub","tier":"2"}'>Sub T2</button>
@@ -433,7 +525,11 @@
         <button type="button" class="small" data-test='{"type":"tip","amount":5}'>Don 5</button>
         <button type="button" class="small" data-test='{"type":"bits","amount":500}'>500 bits</button>
       </div>
-      <p class="help">Les tests ne sont pas comptés dans les statistiques. Retirez le temps ajouté avec les boutons « − » si besoin.</p>
+      <div class="row" style="margin-top:12px">
+        <label class="check"><input type="checkbox" data-cfg="tests.addTime"> Les tests ajoutent du temps</label>
+        <label class="check"><input type="checkbox" data-cfg="tests.countStats"> Les tests comptent dans les statistiques</label>
+      </div>
+      <p class="help">Retirez le temps ajouté par un test avec les boutons « − » si besoin.</p>
     </section>
 
     <section>
@@ -510,9 +606,10 @@
     fitFrame($('offPreview'), frame);
     let type = 'min';
     const saved = (() => { try { return JSON.parse(store.get('lunaria-offline') || '{}'); } catch (_) { return {}; } })();
-    for (const id of ['offMin', 'offAt', 'offTop', 'offBottom', 'offEnd', 'offAccent', 'offScale']) {
-      if (saved[id] != null) $(id).value = saved[id];
-    }
+    const FIELDS = ['offMin', 'offAt', 'offTop', 'offBottom', 'offEnd', 'offAccent', 'offScale', 'offZc', 'offZt', 'offPx', 'offPy', 'offAnim', 'offEndFx', 'offEndSound', 'offVol'];
+    const CHECKS = ['offSparkles', 'offPulse', 'offStars', 'offUrgency'];
+    for (const id of FIELDS) if (saved[id] != null) $(id).value = saved[id];
+    for (const id of CHECKS) if (saved[id] != null) $(id).checked = !!saved[id];
     if (saved.type) type = saved.type;
 
     function overlayBase() {
@@ -527,6 +624,20 @@
       q.set('end', $('offEnd').value);
       q.set('accent', $('offAccent').value.replace('#', ''));
       q.set('scale', $('offScale').value);
+      if ($('offZc').value !== '100') q.set('zc', $('offZc').value);
+      if ($('offZt').value !== '100') q.set('zt', $('offZt').value);
+      if ($('offPx').value !== '0') q.set('px', $('offPx').value);
+      if ($('offPy').value !== '0') q.set('py', $('offPy').value);
+      q.set('anim', $('offAnim').value);
+      q.set('sparkles', $('offSparkles').checked ? '1' : '0');
+      q.set('pulse', $('offPulse').checked ? '1' : '0');
+      q.set('stars', $('offStars').checked ? '1' : '0');
+      q.set('urgency', $('offUrgency').checked ? '1' : '0');
+      q.set('endfx', $('offEndFx').value);
+      if ($('offEndSound').value !== 'none') {
+        q.set('endsound', $('offEndSound').value);
+        q.set('vol', $('offVol').value);
+      }
       return overlayBase() + '?' + q.toString().replace(/\+/g, '%20');
     }
     let reloadTimer;
@@ -538,16 +649,20 @@
         ? 'Le compte à rebours démarre quand la scène s’affiche.'
         : 'Le compte à rebours vise cette heure, quel que soit le moment où la scène s’affiche.';
       $('offScaleVal').textContent = Math.round($('offScale').value * 100) + ' %';
+      document.querySelectorAll('[data-pct]').forEach((b) => { b.textContent = $(b.dataset.pct).value + ' %'; });
       const url = build();
       $('offUrl').value = url;
       clearTimeout(reloadTimer);
       reloadTimer = setTimeout(() => { frame.src = url; }, 250);
       const data = { type };
-      for (const id of ['offMin', 'offAt', 'offTop', 'offBottom', 'offEnd', 'offAccent', 'offScale']) data[id] = $(id).value;
+      for (const id of FIELDS) data[id] = $(id).value;
+      for (const id of CHECKS) data[id] = $(id).checked;
       store.set('lunaria-offline', JSON.stringify(data));
     }
     document.querySelectorAll('#offType button').forEach((b) => b.addEventListener('click', () => { type = b.dataset.v; refresh(); }));
     $('offlineView').addEventListener('input', refresh);
+    $('offlineView').addEventListener('change', refresh);
+    $('offListen').addEventListener('click', () => window.LunariaSound.play($('offEndSound').value, Number($('offVol').value), 'end'));
     $('offCopy').addEventListener('click', () => copyField($('offUrl')));
     $('offBgBtn').addEventListener('click', () => $('offBgFile').click());
     $('offBgFile').addEventListener('change', () => {
@@ -606,6 +721,7 @@
     fillForm();
     renderAll();
     connectStream();
+    loadSounds(false);
   }
 
   function connectStream() {
@@ -637,6 +753,10 @@
       if (el === document.activeElement) return;
       let v = getPath(c, el.dataset.cfg);
       if (el.type === 'checkbox') el.checked = !!v;
+      else if (el.tagName === 'SELECT') {
+        if (v && !Array.from(el.options).some((o) => o.value === v)) addSoundOption(el, v);
+        el.value = v;
+      }
       else {
         if ('minutes' in el.dataset) v = Math.round((v / 60) * 100) / 100;
         el.value = v == null ? '' : v;
@@ -645,8 +765,41 @@
     const kind = c.athon.kind;
     if (document.activeElement !== $('kindTitle')) $('kindTitle').value = c.athon.titles[kind] || '';
     document.querySelectorAll('[data-count]').forEach((el) => { el.checked = !!c.athon.counts[kind][el.dataset.count]; });
+    $('customKindBtn').textContent = c.athon.titles.custom || 'Personnalisé';
+    showPcts();
     document.querySelectorAll('[data-currency]').forEach((el) => { el.textContent = c.athon.currency; });
     $('scaleVal').textContent = Math.round(c.display.scale * 100) + ' %';
+  }
+
+  function showPcts() {
+    document.querySelectorAll('[data-pct-cfg]').forEach((b) => {
+      const input = document.querySelector(`input[data-cfg="${b.dataset.pctCfg}"]`);
+      b.textContent = (input ? input.value : getPath(data.config, b.dataset.pctCfg)) + ' %';
+    });
+  }
+
+  function addSoundOption(select, value) {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = '\u266a ' + value.slice(5);
+    o.dataset.file = '1';
+    select.appendChild(o);
+  }
+
+  async function loadSounds(notify) {
+    try {
+      const { files } = await api('api/admin/sounds');
+      document.querySelectorAll('select[data-sounds]').forEach((sel) => {
+        const current = sel.value;
+        sel.querySelectorAll('option[data-file]').forEach((o) => o.remove());
+        files.forEach((f) => addSoundOption(sel, 'file:' + f));
+        if (current && !Array.from(sel.options).some((o) => o.value === current)) addSoundOption(sel, current);
+        sel.value = current;
+      });
+      if (notify) toast(files.length ? `${files.length} son(s) trouvé(s) ✓` : 'Aucun fichier dans public/sounds/', !files.length);
+    } catch (err) {
+      if (notify) toast(err.message, true);
+    }
   }
 
   function renderAll() {
@@ -655,7 +808,8 @@
     renderSe();
   }
 
-  const KIND_LABEL = { lunariathon: 'Lunariathon', subathon: 'Subathon', donathon: 'Donathon' };
+  const KIND_LABEL = { lunariathon: 'Lunariathon', subathon: 'Subathon', donathon: 'Donathon', custom: 'Personnalisé' };
+  const kindName = (k) => (k === 'custom' ? data.config.athon.titles.custom || 'Personnalisé' : KIND_LABEL[k]);
   const STATUS_LABEL = { idle: 'prêt', running: 'en cours', paused: 'en pause', ended: 'terminé' };
 
   function remainingMs() {
@@ -675,14 +829,14 @@
     if (!s.clientAt) s.clientAt = Date.now();
     const c = data.config;
     const athon = s.mode === 'athon';
-    $('modeLabel').textContent = `${athon ? KIND_LABEL[c.athon.kind] : 'Starting Soon'} · ${STATUS_LABEL[s.status]}`;
+    $('modeLabel').textContent = `${athon ? kindName(c.athon.kind) : 'Starting Soon'} · ${STATUS_LABEL[s.status]}`;
     $('btnStart').textContent = s.status === 'running' ? 'Pause' : s.status === 'paused' ? 'Reprendre' : 'Lancer';
     document.querySelectorAll('#modeSeg button').forEach((b) => {
       b.classList.toggle('on', b.dataset.mode === s.mode && (!athon || b.dataset.kind === c.athon.kind));
     });
     $('countdownSettings').classList.toggle('hidden', athon);
     $('athonSettings').classList.toggle('hidden', !athon);
-    $('kindName').textContent = KIND_LABEL[c.athon.kind];
+    $('kindName').textContent = kindName(c.athon.kind);
     $('modeHelp').textContent = athon
       ? 'Les subs, dons et bits cochés plus bas ajoutent du temps automatiquement. Passer d’un -athon à l’autre garde le timer en cours.'
       : 'Simple compte à rebours avant le début du stream. Les subs et les dons n’ajoutent pas de temps dans ce mode.';
@@ -791,6 +945,18 @@
     document.querySelector('[data-cfg="display.scale"]').addEventListener('input', (e) => {
       $('scaleVal').textContent = Math.round(e.target.value * 100) + ' %';
     });
+    document.querySelectorAll('input[type=range][data-cfg]').forEach((el) => el.addEventListener('input', showPcts));
+    document.querySelectorAll('[data-listen]').forEach((b) => b.addEventListener('click', () => {
+      const sel = document.querySelector(`select[data-cfg="${b.dataset.listen}"]`);
+      window.LunariaSound.play(sel.value, data.config.display.sound.volume, 'end' in b.dataset ? 'end' : undefined);
+    }));
+    document.querySelectorAll('[data-preview-fx]').forEach((b) => b.addEventListener('click', () => {
+      const prev = $('liveFrame').contentWindow && $('liveFrame').contentWindow.lunariaPreview;
+      if (!prev) return toast('Aperçu pas encore prêt', true);
+      if (b.dataset.previewFx === 'add') prev.added({ ms: 300000, user: 'Aperçu', label: 'Temps ajouté' });
+      else prev.fx(document.querySelector(`select[data-cfg="${b.dataset.previewFx}"]`).value);
+    }));
+    $('btnSounds').addEventListener('click', () => loadSounds(true));
     $('kindTitle').addEventListener('change', () => {
       saveConfig({ athon: { titles: { [data.config.athon.kind]: $('kindTitle').value } } });
     });

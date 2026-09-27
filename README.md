@@ -58,18 +58,26 @@ timer/
 
 Votre bot lance déjà un serveur web avec `require('./wishlist/server.js')`, et il occupe le seul port de votre serveur Sparked Host. Le timer se branche donc **sur ce même serveur**, sous l'adresse `/timer`.
 
-Dans **`wishlist/server.js`**, juste après la ligne `const app = express();`, ajoutez :
+Dans **`wishlist/server.js`**, deux ajouts :
+
+1. En haut, sous `const crypto = require('crypto');` :
 
 ```js
-app.use(require('../timer/server.js').middleware());   // 🌙 Lunaria Timer → /timer
+const lunariaTimer = require('../timer/server.js').middleware(); // 🌙 Lunaria Timer → /timer
 ```
 
-Si le fichier contient aussi `app.use(express.json())`, vous pouvez mettre la ligne avant ou après, les deux fonctionnent. Elle doit simplement se trouver **avant** les autres routes de la wishlist.
+2. Juste sous `const server = http.createServer(async (req, res) => {` :
+
+```js
+  // 🌙 Lunaria Timer : les adresses /timer/... sont gérées par le timer
+  let timerHandled = true;
+  lunariaTimer(req, res, () => { timerHandled = false; });
+  if (timerHandled) return;
+```
 
 Vous n'avez **rien à changer dans `index.js`** : le timer démarre avec la wishlist.
 
-> `wishlist/server.js` n'utilise pas `express()` ? Envoyez-moi ce fichier et j'adapterai la ligne.
-> Autre solution, si Sparked Host vous donne un **deuxième port** (onglet Network) : ajoutez `require('./timer/server.js');` dans `index.js` sous la ligne de la wishlist, et mettez `LUNARIA_PORT=<ce port>` dans votre `.env`.
+> Avec un serveur Express, une seule ligne suffit : `app.use(require('../timer/server.js').middleware());`.
 
 ### c) Redémarrer et récupérer la clé
 
